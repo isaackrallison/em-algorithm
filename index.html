@@ -1,0 +1,1375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EM Algorithm Lab</title>
+<meta name="description" content="Interactive study guide for §8.7 of Murphy's Probabilistic Machine Learning: bound optimization (MM), the EM algorithm, the ELBO, E and M steps, and EM for a Gaussian mixture on Old Faithful. Explanations at four levels, from elementary school to grad-level ML.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<script>
+window.MathJax = {
+  loader: { load: ['[tex]/html'] },
+  tex: { packages: { '[+]': ['html'] }, inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  svg: { fontCache: 'global' },
+  options: { enableMenu: false }
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js" async></script>
+<style>
+/* Layout: sticky chapter rail + one reading column; every section runs Explain it → Play → Math, slowly → Check yourself */
+:root {
+  --bg: #f3f1ec; --surface: #ffffff; --sunk: #e9e5dc; --ink: #1d1b18; --muted: #5f5a52; --rule: #d9d3c6;
+  --obj: #c0392b; --bnd: #1f5fa8; --prev: #1d7a49; --gap: #a35d00; --mi: #6a3fc1; --green: #1d7a49;
+  --c1: #d2373f; --c2: #2565c4;
+  --obj-soft: rgba(192,57,43,.13); --bnd-soft: rgba(31,95,168,.14); --gap-soft: rgba(163,93,0,.16); --mi-soft: rgba(106,63,193,.14); --green-soft: rgba(29,122,73,.14);
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12110f; --surface: #1b1a17; --sunk: #25231f; --ink: #ece7de; --muted: #a59e92; --rule: #35322c;
+    --obj: #f0776a; --bnd: #6ea8ec; --prev: #52c48a; --gap: #e2a34b; --mi: #b393f2; --green: #52c48a;
+    --c1: #f06a70; --c2: #5f9cf0;
+    --obj-soft: rgba(240,119,106,.18); --bnd-soft: rgba(110,168,236,.18); --gap-soft: rgba(226,163,75,.2); --mi-soft: rgba(179,147,242,.2); --green-soft: rgba(82,196,138,.16);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12110f; --surface: #1b1a17; --sunk: #25231f; --ink: #ece7de; --muted: #a59e92; --rule: #35322c;
+  --obj: #f0776a; --bnd: #6ea8ec; --prev: #52c48a; --gap: #e2a34b; --mi: #b393f2; --green: #52c48a;
+  --c1: #f06a70; --c2: #5f9cf0;
+  --obj-soft: rgba(240,119,106,.18); --bnd-soft: rgba(110,168,236,.18); --gap-soft: rgba(226,163,75,.2); --mi-soft: rgba(179,147,242,.2); --green-soft: rgba(82,196,138,.16);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.6; margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 0 80px; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 48px; }
+@media (max-width: 900px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; padding-inline: 16px; } .rail { display: none; } }
+
+/* top bar */
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); border-bottom: 1px solid var(--rule); }
+.topbar-in { max-width: 1180px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 14px; }
+.brand { font-family: var(--display); font-weight: 800; font-size: 17px; letter-spacing: -.01em; white-space: nowrap; }
+.brand span { color: var(--mi); }
+.chips { display: none; overflow-x: auto; gap: 6px; flex: 1; min-width: 0; scrollbar-width: none; }
+.chips a { font-family: var(--mono); font-size: 12px; white-space: nowrap; padding: 4px 9px; border: 1px solid var(--rule); border-radius: 99px; color: var(--ink); text-decoration: none; }
+@media (max-width: 900px) { .chips { display: flex; } .topbar-in { padding: 10px 16px; flex-wrap: wrap; row-gap: 8px; } .brand { display: none; } }
+.tb-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.score { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; padding: 5px 10px; border-radius: 99px; background: var(--surface); border: 1px solid var(--rule); }
+.score b { color: var(--green); }
+.lvpick { display: inline-flex; border: 1px solid var(--rule); border-radius: 99px; overflow: hidden; background: var(--surface); }
+.lvpick button { font-family: var(--mono); font-size: 11.5px; padding: 5px 9px; border: 0; background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.lvpick button.on { background: var(--mi); color: #fff; }
+@media (max-width: 900px) { .tb-right { margin-left: 0; width: 100%; justify-content: space-between; } }
+
+/* rail */
+.rail nav { position: sticky; top: 70px; padding-top: 40px; display: flex; flex-direction: column; gap: 2px; }
+.rail a { display: grid; grid-template-columns: 62px 1fr; gap: 4px; padding: 6px 8px; border-radius: 6px; color: var(--muted); text-decoration: none; font-family: var(--display); font-size: 14.5px; line-height: 1.3; }
+.rail a .n { font-family: var(--mono); font-size: 11.5px; padding-top: 2px; }
+.rail a:hover, .rail a.on { color: var(--ink); background: var(--sunk); }
+
+main { min-width: 0; }
+header.hero { padding-block: 48px 28px; border-bottom: 1px solid var(--rule); }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(34px, 5.5vw, 58px); line-height: 1.02; letter-spacing: -.025em; margin: 10px 0 16px; text-wrap: balance; }
+h1 .o { color: var(--obj); } h1 .b { color: var(--bnd); } h1 .m { color: var(--mi); }
+.lede { max-width: 66ch; color: var(--muted); font-size: 18px; margin: 0; }
+.levelcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 24px; }
+@media (max-width: 760px) { .levelcards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.levelcards button { text-align: left; font-family: var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; cursor: pointer; }
+.levelcards button b { display: block; font-family: var(--display); font-size: 17px; }
+.levelcards button span { font-size: 14px; color: var(--muted); line-height: 1.35; display: block; margin-top: 2px; }
+.levelcards button.on { border-color: var(--mi); box-shadow: inset 0 0 0 1.5px var(--mi); background: var(--mi-soft); }
+.legend3 { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 22px; font-family: var(--mono); font-size: 12.5px; }
+.legend3 span { display: inline-flex; align-items: center; gap: 8px; }
+.legend3 i { width: 18px; height: 0; border-top: 3px solid; display: inline-block; }
+.legend3 i.dot { width: 10px; height: 10px; border: 0; border-radius: 50%; }
+
+section.sec { padding-block: 56px 8px; border-bottom: 1px solid var(--rule); scroll-margin-top: 60px; }
+.sec-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.secnum { font-family: var(--mono); font-size: 13px; color: var(--mi); border: 1px solid currentColor; border-radius: 4px; padding: 1px 7px; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.4vw, 36px); line-height: 1.1; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.intro { max-width: 66ch; }
+.intro p { margin: 12px 0; }
+
+.block { margin-top: 28px; }
+.blabel { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+.blabel::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+.blabel .tag { color: var(--surface); background: var(--ink); padding: 2px 7px; border-radius: 3px; letter-spacing: .06em; }
+.block.math .blabel .tag { background: var(--bnd); }
+.block.quiz .blabel .tag { background: var(--green); }
+.block.play .blabel .tag { background: var(--mi); }
+.block.lv .blabel .tag { background: var(--gap); }
+
+/* level explanations */
+.lvcard { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 0; overflow: hidden; }
+.lvtabs { display: flex; border-bottom: 1px solid var(--rule); background: var(--sunk); overflow-x: auto; scrollbar-width: none; }
+.lvtabs button { font-family: var(--mono); font-size: 12px; padding: 9px 14px; border: 0; border-right: 1px solid var(--rule); background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.lvtabs button.on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--mi); }
+.lvbody { padding: 6px 20px 14px; }
+.lvbody > div { max-width: 68ch; }
+.lvbody p, .lvbody li { margin: 10px 0; }
+.lvbody ul, .lvbody ol { padding-left: 22px; }
+.lvbody .big { font-size: 19px; }
+
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; }
+.panel + .panel { margin-top: 16px; }
+.panel h4 { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 0 0 4px; }
+.hint { font-size: 14.5px; color: var(--muted); margin: 0 0 12px; }
+.two { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.gmm-two { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+.two-even { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+@media (max-width: 760px) { .two, .two-even { grid-template-columns: minmax(0, 1fr); } }
+.cap { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 0 0 4px; }
+
+svg.plot { width: 100%; height: auto; display: block; overflow: visible; touch-action: none; }
+svg.click { cursor: crosshair; }
+svg:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--mi); outline-offset: 2px; }
+.ax { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+.axl { font-family: var(--mono); font-size: 11.5px; fill: var(--ink); }
+.lbl { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.grid { stroke: var(--rule); stroke-width: 1; }
+.base { stroke: var(--muted); stroke-width: 1; }
+
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 14px; }
+.stat { background: var(--sunk); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.stat .k { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.stat .v { font-family: var(--display); font-weight: 700; font-size: 23px; font-variant-numeric: tabular-nums; line-height: 1.15; overflow-wrap: anywhere; }
+.stat.o .v { color: var(--obj); } .stat.b .v { color: var(--bnd); } .stat.a .v { color: var(--gap); } .stat.g .v { color: var(--green); } .stat.m .v { color: var(--mi); }
+.chain { font-family: var(--mono); font-size: 13.5px; background: var(--sunk); border-radius: 8px; padding: 10px 14px; margin-top: 12px; line-height: 1.8; overflow-x: auto; }
+.chain .o { color: var(--obj); font-weight: 600; } .chain .b { color: var(--bnd); font-weight: 600; } .chain .ok { color: var(--green); font-weight: 600; } .chain .bad { color: var(--obj); font-weight: 600; } .chain .a { color: var(--gap); font-weight: 600; }
+.warn { color: var(--obj); font-weight: 600; }
+
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+button.b { font-family: var(--mono); font-size: 12.5px; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; }
+button.b:hover:not(:disabled) { border-color: var(--ink); }
+button.b:disabled { opacity: .4; cursor: default; }
+button.b.pri { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+button.b.e { border-color: var(--gap); color: var(--gap); }
+button.b.mm { border-color: var(--bnd); color: var(--bnd); }
+button.b.next { box-shadow: 0 0 0 2px var(--mi-soft); border-color: var(--mi); }
+.btns .sep { width: 1px; align-self: stretch; background: var(--rule); margin: 0 4px; }
+.btns .lab { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+label.chk { font-family: var(--mono); font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--rule); border-radius: 7px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 12px; padding: 7px 11px; border: 0; border-right: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: var(--mi); color: #fff; }
+
+.ctrl { display: grid; grid-template-columns: 150px minmax(0, 1fr) 64px; align-items: center; gap: 10px; margin: 6px 0; font-family: var(--mono); font-size: 13px; }
+.ctrl label { color: var(--muted); }
+.ctrl output { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) { .ctrl { grid-template-columns: 110px minmax(0, 1fr) 54px; font-size: 12px; } }
+input[type=range] { width: 100%; accent-color: var(--mi); }
+
+table.t { border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+table.t th, table.t td { padding: 5px 8px; border-bottom: 1px solid var(--rule); text-align: right; white-space: nowrap; }
+table.t th:first-child, table.t td:first-child { text-align: left; }
+table.t th { color: var(--muted); font-weight: 400; font-size: 11.5px; }
+table.t td.c1 { color: var(--c1); font-weight: 600; } table.t td.c2 { color: var(--c2); font-weight: 600; }
+.scroll { overflow-x: auto; }
+.phase { font-family: var(--mono); font-size: 12.5px; padding: 6px 10px; border-radius: 6px; background: var(--mi-soft); display: inline-block; margin-top: 10px; }
+.hover-info { font-family: var(--mono); font-size: 12.5px; background: var(--sunk); border-radius: 8px; padding: 10px 12px; margin-top: 12px; min-height: 64px; line-height: 1.7; overflow-x: auto; }
+.hover-info .c1 { color: var(--c1); font-weight: 600; } .hover-info .c2 { color: var(--c2); font-weight: 600; }
+
+/* math */
+.mathcard { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 6px 20px 16px; }
+.mathcard + .mathcard { margin-top: 16px; }
+.mathcard h4 { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 16px 0 4px; }
+.mathcard p, .mathcard li { max-width: 68ch; }
+.eq { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; max-width: 100%; margin: 10px 0 !important; padding: 2px 0; }
+.to { color: var(--obj); } .tb { color: var(--bnd); } .ta { color: var(--gap); } .tg { color: var(--green); } .tm { color: var(--mi); } .t1 { color: var(--c1); } .t2 { color: var(--c2); }
+.steps { counter-reset: st; list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 4px; }
+.steps > li { counter-increment: st; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-top: 1px dashed var(--rule); }
+.steps > li::before { content: counter(st); font-family: var(--mono); font-size: 12px; color: var(--surface); background: var(--bnd); border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; margin-top: 4px; }
+.steps .why { color: var(--muted); font-size: 15px; }
+.steps > li > div { min-width: 0; }
+.refresh { background: var(--sunk); border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 15.5px; }
+.refresh .ttl { font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.note { border-left: 3px solid var(--gap); padding: 6px 14px; margin: 14px 0; font-size: 15.5px; background: var(--sunk); border-radius: 0 6px 6px 0; }
+
+/* quiz */
+.quizbox { display: grid; gap: 14px; }
+.qq { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; }
+.qq .qt { font-weight: 600; margin: 0 0 10px; }
+.qq .qt .qn { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-right: 8px; font-weight: 400; }
+.qq .qt .ql { font-family: var(--mono); font-size: 11px; color: var(--gap); border: 1px solid currentColor; border-radius: 3px; padding: 0 5px; margin-left: 8px; font-weight: 400; white-space: nowrap; }
+.opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 600px) { .opts { grid-template-columns: minmax(0, 1fr); } }
+.opt { text-align: left; font-family: var(--body); font-size: 15.5px; line-height: 1.4; padding: 9px 12px; border-radius: 7px; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); cursor: pointer; }
+.opt:hover:not(:disabled) { border-color: var(--ink); }
+.opt:disabled { cursor: default; }
+.opt.right { border-color: var(--green); background: var(--green-soft); }
+.opt.wrong { border-color: var(--obj); background: var(--obj-soft); }
+.why-ans { margin: 10px 0 0; font-size: 15px; padding: 8px 12px; border-radius: 6px; background: var(--sunk); }
+.why-ans b.ok { color: var(--green); } .why-ans b.no { color: var(--obj); }
+.quizfoot { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 12.5px; color: var(--muted); gap: 10px; flex-wrap: wrap; }
+
+table.vs { border-collapse: collapse; width: 100%; font-size: 15px; }
+table.vs th, table.vs td { padding: 9px 10px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+table.vs thead th { font-family: var(--display); font-size: 16px; }
+table.vs tbody th { font-family: var(--mono); font-size: 12px; font-weight: 400; color: var(--muted); white-space: nowrap; }
+
+footer { padding-block: 32px; color: var(--muted); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <div class="brand">EM <span>Algorithm</span> Lab</div>
+  <div class="chips">
+    <a href="#mm">8.7.1</a><a href="#em">8.7.2</a><a href="#lb">8.7.2.1</a><a href="#estep">8.7.2.2</a><a href="#mstep">8.7.2.3</a><a href="#gmm">8.7.3</a><a href="#cheat">Sheet</a>
+  </div>
+  <div class="tb-right">
+    <div class="lvpick" id="lvpick" role="group" aria-label="Explanation level">
+      <button data-setl="1">Kid</button><button data-setl="2">High school</button><button data-setl="3">Undergrad</button><button data-setl="4">Grad</button>
+    </div>
+    <div class="score" id="score">Quiz <b>0</b> / 0</div>
+  </div>
+</div></div>
+
+<div class="wrap">
+<aside class="rail"><nav id="rail">
+  <a href="#mm"><span class="n">8.7.1</span>Bound optimization (MM)</a>
+  <a href="#em"><span class="n">8.7.2</span>The EM algorithm</a>
+  <a href="#lb"><span class="n">8.7.2.1</span>The lower bound (ELBO)</a>
+  <a href="#estep"><span class="n">8.7.2.2</span>E step</a>
+  <a href="#mstep"><span class="n">8.7.2.3</span>M step</a>
+  <a href="#gmm"><span class="n">8.7.3</span>EM for a Gaussian mixture</a>
+  <a href="#cheat"><span class="n">—</span>Cheat sheet</a>
+</nav></aside>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">Murphy, <i>Probabilistic Machine Learning</i> · Chapter 8 · §8.7 (skipping §8.7.3.4–8.7.3.5)</div>
+  <h1>Can't climb the <span class="o">hill</span>? Climb a <span class="b">floor</span> that sits under it, again and again. That's <span class="m">EM</span>.</h1>
+  <p class="lede">Bound optimization swaps a hard objective for an easy lower bound that touches it at your current guess. Climbing the bound can only lift the real objective. EM is the version for models with hidden variables: <b>E</b> guesses the hidden parts, <b>M</b> refits the model as if those guesses were data. Every section has four parts: <b>Explain it</b> at your level, <b>Play</b>, <b>Math, slowly</b>, and <b>Check yourself</b>. Your quiz score sits in the top bar.</p>
+  <div class="levelcards" id="levelcards">
+    <button data-setl="1"><b>Kid</b><span>Elementary school. Stories, no symbols.</span></button>
+    <button data-setl="2"><b>High school</b><span>Algebra, averages, parabolas, a little probability.</span></button>
+    <button data-setl="3"><b>Undergrad</b><span>Calculus, Bayes' rule, log-likelihoods, the book's equations.</span></button>
+    <button data-setl="4"><b>Grad / MLE</b><span>Convergence, exponential families, variants, practice.</span></button>
+  </div>
+  <p class="hint" style="margin-top:10px">Pick a level here or in the top bar. Every "Explain it" box switches to match, and you can still flip tabs one box at a time.</p>
+  <div class="legend3">
+    <span><i style="border-color:var(--obj);border-top-style:dashed"></i>the real objective ℓ(θ)</span>
+    <span><i style="border-color:var(--bnd)"></i>the current lower bound Q(θ, θᵗ)</span>
+    <span><i style="border-color:var(--gap)"></i>the gap (a KL divergence in EM)</span>
+    <span><i class="dot" style="background:var(--c1)"></i><i class="dot" style="background:var(--c2);margin-left:-4px"></i>cluster 1 / cluster 2</span>
+  </div>
+</header>
+
+<!-- ============ 8.7.1 MM ============ -->
+<section class="sec" id="mm">
+  <div class="sec-head"><span class="secnum">§8.7.1</span><h2>The general algorithm: climb a floor that touches the hill</h2></div>
+  <div class="intro">
+    <p>We want to <b>maximize</b> some function \(\ell(\theta)\), usually a log-likelihood. MM (minorize-maximize) builds a <b>surrogate</b> \(Q(\theta,\theta^t)\) that sits <i>under</i> \(\ell\) everywhere and <i>touches</i> it at the current guess \(\theta^t\). Then it jumps to the top of the surrogate and repeats.</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">You're trying to get to the top of a hill, but it's so foggy you can only feel the ground right under your feet.</p>
+        <p>You have a magic tent. When you set it up, it always fits <b>under</b> the ground, and its pole touches the ground exactly where you're standing. The tent is a simple dome, so its top is easy to find.</p>
+        <p>Walk to where the tent is tallest. The tent is under the ground everywhere, so the ground at that spot is <b>at least</b> as high as the tent there. And the tent's top is at least as high as where you started. So you're never lower than before.</p>
+        <p>Set the tent up again at your new spot and repeat. Step by step you get higher, and you never slide back down.</p>
+      </div>
+      <div data-l="2">
+        <p>Picture the objective \(\ell(\theta)\) as a curvy graph with no easy formula for its peak. At your current guess \(\theta^t\), draw a <b>downward parabola</b> that:</p>
+        <ol><li>passes through the point \((\theta^t, \ell(\theta^t))\), and</li><li>stays <b>below</b> the curve everywhere else.</li></ol>
+        <p>You can find a parabola's peak with the vertex formula \(x = -b/2a\). Call that peak \(\theta^{t+1}\). Then three facts chain together:</p>
+        <ul><li>The curve is above the parabola at \(\theta^{t+1}\) (the parabola is always under it).</li><li>The parabola's peak is at least as high as the parabola at \(\theta^t\) (it's the peak).</li><li>The parabola at \(\theta^t\) equals the curve at \(\theta^t\) (they touch).</li></ul>
+        <p>So \(\ell(\theta^{t+1}) \ge \ell(\theta^t)\). The score can't go down. In the Play box, try shrinking the parabola's curvature until it pokes <i>above</i> the curve: the guarantee breaks.</p>
+      </div>
+      <div data-l="3">
+        <p>\(Q\) <b>minorizes</b> \(\ell\) at \(\theta^t\) if \(Q(\theta,\theta^t)\le \ell(\theta)\) for all \(\theta\) (lower bound) and \(Q(\theta^t,\theta^t)=\ell(\theta^t)\) (tight). The update \(\theta^{t+1}=\arg\max_\theta Q(\theta,\theta^t)\) then gives the monotone chain in Eq. 8.145.</p>
+        <p>The demo's surrogate comes from Taylor's theorem. If \(|\ell''|\le L\) everywhere, then \(\ell(\theta)\ge \ell(\theta^t)+\ell'(\theta^t)(\theta-\theta^t)-\tfrac L2(\theta-\theta^t)^2\). That quadratic is a valid minorizer, and its argmax is \(\theta^t+\ell'(\theta^t)/L\): gradient ascent with step size \(1/L\).</p>
+        <p><b>Newton vs MM.</b> Newton uses the <i>actual</i> curvature \(\ell''(\theta^t)\). That's a better local fit, but it's an approximation, not a bound. Where \(\ell\) curves upward (\(\ell''>0\)), Newton's "parabola" opens upward and its stationary point is a minimum. Where curvature is small, Newton leaps too far. Both can lower the objective (Figure 8.24).</p>
+        <p><b>Debugging rule:</b> if your MM/EM objective ever decreases, there is a bug in your math or code.</p>
+      </div>
+      <div data-l="4">
+        <p>MM generalizes EM, IRLS-with-curvature-bounds (Böhning–Lindsay's quadratic lower bound, e.g. \(-\tfrac14X^\top X\) for logistic regression), iterative scaling, NMF multiplicative updates and many proximal schemes. The descent lemma for \(L\)-smooth \(\ell\) is the canonical quadratic minorizer; gradient ascent with step \(1/L\) is MM.</p>
+        <ul>
+          <li><b>Convergence.</b> Monotonicity plus boundedness gives convergence of \(\ell(\theta^t)\). Under continuity of the map \(M(\theta^t)=\arg\max Q(\cdot,\theta^t)\) (Zangwill / Wu 1983 conditions), limit points are stationary points of \(\ell\). They could be saddles, though that's rare in practice.</li>
+          <li><b>Rate.</b> Typically linear, with rate set by the spectral radius of \(DM\) at the fixed point, roughly \(I-(\nabla^2 Q)^{-1}\nabla^2\ell\). A tight bound gives fast convergence and a loose bound gives slow convergence. For EM, that ratio is the fraction of missing information.</li>
+          <li><b>Acceleration</b> (SQUAREM, Anderson, momentum, quasi-Newton on \(M\)) can be dramatically faster but gives up monotonicity unless safeguarded.</li>
+          <li><b>Practice.</b> Assert \(\ell(\theta^{t+1})\ge\ell(\theta^t)-\varepsilon\) in your training loop. It catches gradient-sign errors, stale sufficient statistics and off-by-one normalizers in one line.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>MM vs Newton on a bumpy objective (Figures 8.23 and 8.24)</h3>
+    <div class="panel">
+      <p class="hint">The <span style="color:var(--obj)">dashed red curve</span> is \(\ell(\theta)\). The <span style="color:var(--bnd)">solid blue parabola</span> is the bound \(Q(\theta,\theta^t)\), touching at \(\theta^t\). The <span style="color:var(--prev)">dotted green</span> curve is the previous bound. <b>Click anywhere on the plot</b> to choose a starting point, then press <b>MM step</b>. Turn on Newton to see its quadratic <i>approximation</i> (amber, dashed) and where it would jump (◆).</p>
+      <svg class="plot click" id="mm-plot" viewBox="0 0 640 300" aria-label="Objective function with a quadratic lower bound. Click to choose the starting point."></svg>
+      <div class="ctrl"><label for="mm-c">bound curvature</label><input type="range" id="mm-c" min="0.2" max="3" step="0.05" value="1"><output id="mm-c-o"></output></div>
+      <p class="hint" style="margin:0">Curvature is shown as a multiple of the safe value \(L=\max|\ell''|\). At 1× and above the parabola is guaranteed to stay under the curve. Below 1× it can poke through (shaded red), and then the step may <i>lose</i> height.</p>
+      <div class="btns">
+        <button class="b pri" id="mm-step">MM step</button>
+        <button class="b" id="mm-run">Run 10 steps</button>
+        <button class="b" id="mm-reset">Clear history</button>
+        <span class="sep"></span>
+        <label class="chk"><input type="checkbox" id="mm-newton"> show Newton</label>
+        <span class="sep"></span>
+        <span class="lab">presets:</span>
+        <button class="b" data-mmp="1.75">Newton overshoots</button>
+        <button class="b" data-mmp="-1.25">Newton goes downhill</button>
+        <button class="b" data-mmp="2.75">Slow climb</button>
+      </div>
+      <div class="readout">
+        <div class="stat"><div class="k">step t</div><div class="v" id="mm-t"></div></div>
+        <div class="stat o"><div class="k">ℓ(θᵗ)</div><div class="v" id="mm-l0"></div></div>
+        <div class="stat b"><div class="k">Q(θᵗ⁺¹, θᵗ)</div><div class="v" id="mm-q1"></div></div>
+        <div class="stat o"><div class="k">ℓ(θᵗ⁺¹)</div><div class="v" id="mm-l1"></div></div>
+        <div class="stat a"><div class="k">Newton → ℓ</div><div class="v" id="mm-nl"></div></div>
+      </div>
+      <div class="chain" id="mm-chain"></div>
+      <p class="cap" style="margin-top:14px">ℓ(θᵗ) over the MM steps you've taken (should only go up)</p>
+      <svg class="plot" id="mm-trace" viewBox="0 0 640 90" aria-label="Objective value over iterations"></svg>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>Equations 8.144 – 8.145</h3>
+    <div class="mathcard">
+      <h4>The two rules a surrogate must obey</h4>
+      <div class="eq">\[ \underbrace{\class{tb}{Q(\theta,\theta^t)} \le \class{to}{\ell(\theta)} \text{ for every } \theta}_{\text{lower bound}} \qquad\qquad \underbrace{\class{tb}{Q(\theta^t,\theta^t)} = \class{to}{\ell(\theta^t)}}_{\text{touches at the current guess}} \]</div>
+      <p>If both hold we say \(Q\) <b>minorizes</b> \(\ell\). The update is just "go to the top of the surrogate":</p>
+      <div class="eq">\[ \theta^{t+1} = \arg\max_\theta \class{tb}{Q(\theta,\theta^t)} \tag{8.144} \]</div>
+      <h4>Why the objective can never go down</h4>
+      <div class="eq">\[ \class{to}{\ell(\theta^{t+1})} \;\overset{①}{\ge}\; \class{tb}{Q(\theta^{t+1},\theta^t)} \;\overset{②}{\ge}\; \class{tb}{Q(\theta^t,\theta^t)} \;\overset{③}{=}\; \class{to}{\ell(\theta^t)} \tag{8.145} \]</div>
+      <ol class="steps">
+        <li><div><b>① lower bound.</b> \(Q(\cdot,\theta^t)\) is under \(\ell\) at <i>every</i> point, so in particular at \(\theta^{t+1}\). <span class="why">In the plot, the vertical green gap between the square and the dot above it.</span></div></li>
+        <li><div><b>② argmax.</b> \(\theta^{t+1}\) is the best point on \(Q\), so it beats every other point, including \(\theta^t\). <span class="why">You can't climb a parabola and end up lower than where you started on it.</span></div></li>
+        <li><div><b>③ tightness.</b> The surrogate touches \(\ell\) at \(\theta^t\). <span class="why">This is what ties the bound's progress back to the real objective.</span></div></li>
+      </ol>
+      <div class="note">Drop rule ① (curvature below 1× in the demo) and the chain breaks at the first link. That is exactly what you see when the shaded "pokes through" region contains \(\theta^{t+1}\).</div>
+      <h4>The quadratic bound used in the demo</h4>
+      <div class="eq">\[ \class{tb}{Q(\theta,\theta^t)} = \ell(\theta^t) + \ell'(\theta^t)(\theta-\theta^t) - \frac{c\,L}{2}(\theta-\theta^t)^2, \qquad L=\max_\theta|\ell''(\theta)| \]</div>
+      <p>Setting \(\partial Q/\partial\theta = 0\) gives \(\theta^{t+1}=\theta^t+\ell'(\theta^t)/(cL)\). Newton instead uses \(\theta^{t+1}=\theta^t-\ell'(\theta^t)/\ell''(\theta^t)\), the stationary point of an approximation that has no reason to stay under \(\ell\).</p>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>Bound optimization</h3><div class="quizbox" data-quiz="mm"></div></div>
+</section>
+
+<!-- ============ 8.7.2 EM overview ============ -->
+<section class="sec" id="em">
+  <div class="sec-head"><span class="secnum">§8.7.2</span><h2>The EM algorithm: a chicken-and-egg problem, solved by taking turns</h2></div>
+  <div class="intro">
+    <p>Each example has <b>visible</b> data \(y_n\) and <b>hidden</b> data \(z_n\), such as which cluster a point came from. If we knew the \(z_n\), fitting \(\theta\) would be easy. If we knew \(\theta\), guessing the \(z_n\) would be easy. EM alternates between the two, and it turns out to be an MM algorithm, so it never makes the likelihood worse.</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">Two bakeries, Rosie's and Blue Door, both sell cookies. You find a big pile of cookies, all mixed up, with no labels.</p>
+        <p>You want to know what each bakery's "usual cookie" is like. If you knew who baked each cookie, that would be easy: sort them into two piles and look at each pile. If you knew what each bakery's usual cookie was like, sorting would be easy too: put each cookie with the bakery it looks most like.</p>
+        <p>You know neither! So you <b>take turns</b>:</p>
+        <ol><li><b>Guess</b> who made each cookie, using your current idea of each bakery. If you're not sure, say "70% Rosie's, 30% Blue Door."</li><li><b>Update</b> your idea of each bakery using those guesses.</li><li>Go back to step 1.</li></ol>
+        <p>Each round your story about the cookies fits a little better, and it never gets worse.</p>
+      </div>
+      <div data-l="2">
+        <p>EM is two steps on repeat:</p>
+        <ul><li><b>E step (Expectation).</b> Using the current model, compute the probability of each hidden label for each data point, for example "point 7 is 82% cluster 1." This uses Bayes' rule.</li><li><b>M step (Maximization).</b> Treat those probabilities as fractional counts and refit the model. Point 7 counts as 0.82 of a point for cluster 1 and 0.18 for cluster 2. The new cluster centers are weighted averages.</li></ul>
+        <p>Why does this work? The E step builds a floor under the log-likelihood that touches it at the current model. The M step climbs that floor. That's the MM picture from §8.7.1, so the log-likelihood can only go up.</p>
+      </div>
+      <div data-l="3">
+        <p>The observed-data log-likelihood \(\ell(\theta)=\sum_n\log\sum_{z_n}p(y_n,z_n\mid\theta)\) has a log of a sum, so it doesn't decouple. EM:</p>
+        <ul><li><b>E step:</b> \(q_n^t(z_n)=p(z_n\mid y_n,\theta^t)\). This makes the ELBO tight at \(\theta^t\).</li><li><b>M step:</b> \(\theta^{t+1}=\arg\max_\theta \sum_n \mathbb E_{q_n^t}[\log p(y_n,z_n\mid\theta)]\). This is a complete-data MLE with soft labels, usually in closed form.</li></ul>
+        <p>Defining \(Q(\theta,\theta^t)=\text{ELBO}(\theta,\{q^t_n\})\) gives a minorizer, so EM inherits Eq. 8.145. It converges to a <b>local</b> maximum (more precisely, a stationary point). How fast depends on how much information is missing.</p>
+      </div>
+      <div data-l="4">
+        <p>EM is coordinate ascent on \(\mathcal{L}(\theta,q)\) (Neal &amp; Hinton 1998): the E step maximizes over \(q\) (KL projection), the M step over \(\theta\). This view justifies partial E steps (incremental / online / sparse EM) and partial M steps (GEM, ECM) without losing monotonicity.</p>
+        <ul>
+          <li><b>Rate.</b> Dempster–Laird–Rubin: the Jacobian of the EM map at \(\hat\theta\) is \(I_c^{-1}I_m\), where \(I_m = I_c - I_o\) is the missing information. When clusters overlap heavily, \(I_m\approx I_c\) and EM crawls.</li>
+          <li><b>Fisher's identity.</b> \(\nabla\ell(\theta^t)=\nabla_\theta Q(\theta,\theta^t)\big|_{\theta=\theta^t}\), so the E-step statistics also give exact gradients if you'd rather use L-BFGS on \(\ell\) directly.</li>
+          <li><b>When the posterior is intractable:</b> variational EM (non-tight bound), Monte Carlo EM, stochastic EM. With an amortized encoder and SGD, this becomes the VAE.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>Figure 8.23 for real: watch EM's bound appear, then get climbed</h3>
+    <div class="panel">
+      <p class="hint">A 1-D mixture of two Gaussians (σ = 1, equal weights). Cluster 2's mean is fixed at <b id="loop-mu2">0.5</b>, and we learn only cluster 1's mean <b>θ = μ₁</b>, so the whole log-likelihood fits on one axis. <b>E step</b> computes the responsibilities and draws the blue bound, which touches the red curve. <b>M step</b> jumps to the bound's peak. Now the red curve sits <i>above</i> the old bound, and that <span style="color:var(--gap)">amber gap</span> is the KL divergence the next E step will close. Click the plot to pick a new starting θ. This ℓ has <b>two peaks</b>: start at the right and EM climbs the lower one and stops there. EM only promises a <i>local</i> maximum.</p>
+      <svg class="plot click" id="loop-plot" viewBox="0 0 640 330" aria-label="Log-likelihood as a function of mu1, with the EM lower bound. Click to choose a starting point."></svg>
+      <div class="ctrl"><label for="loop-mu2s">fixed μ₂</label><input type="range" id="loop-mu2s" min="-1" max="4" step="0.1" value="0.5"><output id="loop-mu2o"></output></div>
+      <div class="btns">
+        <button class="b e" id="loop-e">E step</button>
+        <button class="b mm" id="loop-m">M step</button>
+        <button class="b pri" id="loop-em">Full EM iteration</button>
+        <button class="b" id="loop-run">Run to convergence</button>
+        <button class="b" id="loop-reset">Reset</button>
+      </div>
+      <div class="phase" id="loop-phase"></div>
+      <div class="readout">
+        <div class="stat"><div class="k">iteration</div><div class="v" id="loop-it"></div></div>
+        <div class="stat"><div class="k">θ = μ₁</div><div class="v" id="loop-th"></div></div>
+        <div class="stat o"><div class="k">ℓ(θ)</div><div class="v" id="loop-l"></div></div>
+        <div class="stat b"><div class="k">bound Q at θ</div><div class="v" id="loop-q"></div></div>
+        <div class="stat a"><div class="k">gap = Σ KL</div><div class="v" id="loop-gap"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>The plan</h3>
+    <div class="mathcard">
+      <h4>Notation</h4>
+      <ul>
+        <li>\(y_n\): what we <b>see</b> for example \(n\) (a geyser measurement).</li>
+        <li>\(z_n\): what we <b>don't see</b> (which cluster it came from).</li>
+        <li>\(\theta\): the parameters (cluster means, covariances, weights).</li>
+      </ul>
+      <h4>The loop</h4>
+      <ol class="steps">
+        <li><div><b>E step:</b> for each \(n\), compute \(q_n(z_n) = p(z_n\mid y_n,\theta^t)\). <span class="why">Fill in the hidden data, but as probabilities, not hard guesses.</span></div></li>
+        <li><div><b>M step:</b> \(\theta^{t+1}=\arg\max_\theta \sum_n\sum_{z_n} q_n(z_n)\log p(y_n,z_n\mid\theta)\). <span class="why">Fit the model as if the filled-in data were real, weighting each guess by its probability.</span></div></li>
+        <li><div><b>Repeat.</b> <span class="why">The guesses depend on θ and θ depends on the guesses, so one pass isn't enough.</span></div></li>
+      </ol>
+      <p>The next three sections answer three questions in turn. Why is there a lower bound at all? (§8.7.2.1) Why does the E step make it touch? (§8.7.2.2) Why is the M step easy? (§8.7.2.3)</p>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>The EM loop</h3><div class="quizbox" data-quiz="em"></div></div>
+</section>
+
+<!-- ============ 8.7.2.1 Lower bound ============ -->
+<section class="sec" id="lb">
+  <div class="sec-head"><span class="secnum">§8.7.2.1</span><h2>The lower bound: Jensen's inequality turns a log-of-sum into a sum-of-logs</h2></div>
+  <div class="intro">
+    <p>The log-likelihood has a \(\log\) wrapped around a \(\sum_{z}\), and that's what makes it hard. The trick is to insert a distribution \(q_n(z_n)\) and push the log <i>inside</i> the sum. You pay for it by getting a lower bound instead of an equality.</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">"Log" is a squisher. It squishes big numbers a lot and small numbers only a little.</p>
+        <p>Take two numbers, like 1 and 9. Average first, then squish: you squish 5. Squish first, then average: you average a squished 1 and a squished 9. Because the 9 got squished extra hard, the second way always comes out <b>smaller</b>.</p>
+        <p>So "squish-then-average" makes a <b>floor</b> under "average-then-squish." The thing we really want is the second one, but it's hard to work with. The floor is easy to work with, and if we push the floor up, the real thing has to be at least that high too.</p>
+      </div>
+      <div data-l="2">
+        <p>We need \(\log(\text{a sum})\), which is messy. Two moves fix that:</p>
+        <ol><li><b>Multiply by 1 in disguise.</b> Write each term \(p\) as \(q\cdot\frac{p}{q}\), where the \(q\)'s are any probabilities that add to 1. Now the sum is a <b>weighted average</b> of the ratios \(p/q\).</li><li><b>Jensen's inequality.</b> The log graph bends downward, so the chord between two points on it lies <b>under</b> the curve. That means \(\log(\text{average}) \ge \text{average}(\log)\).</li></ol>
+        <p>The right side is a sum of logs, and that's easy to maximize. In the Play box, the amber gap is how much we lose. When every ratio \(p/q\) is the <i>same</i> number, the gap is zero.</p>
+      </div>
+      <div data-l="3">
+        <p>For any distribution \(q_n\) over \(z_n\):</p>
+        <p>\(\log\sum_z p(y,z\mid\theta) = \log \mathbb E_{q}\!\left[\frac{p(y,z\mid\theta)}{q(z)}\right] \ge \mathbb E_q\!\left[\log\frac{p(y,z\mid\theta)}{q(z)}\right]\)</p>
+        <p>because \(\log\) is concave. Split the right side into \(\mathbb E_q[\log p(y,z\mid\theta)] + \mathbb H(q)\). That's the <b>ELBO</b>, the evidence lower bound. It holds for <b>every</b> \(q\), and equality needs \(p(y,z\mid\theta)/q(z)\) to be constant in \(z\). That forces \(q(z)\propto p(y,z\mid\theta)\), i.e. \(q = p(z\mid y,\theta)\). The next section shows this directly.</p>
+      </div>
+      <div data-l="4">
+        <p>\(\mathcal L(\theta,q)=\mathbb E_q[\log p(y,z\mid\theta)]+\mathbb H(q)=-F(\theta,q)\), the negative variational free energy. Key identity: \(\log p(y\mid\theta)=\mathcal L(\theta,q)+D_{\mathbb{KL}}(q\,\|\,p(z\mid y,\theta))\).</p>
+        <ul>
+          <li>The bound is <b>jointly</b> a function of \((\theta, q)\). EM fixes the family of \(q\) to be unrestricted, so the bound can be tight. Variational inference restricts \(q\) (mean-field, Gaussian, normalizing flow), and the gap becomes a persistent bias.</li>
+          <li>Bounds like IWAE use \(\log\frac1K\sum_k w_k\) with \(K\) importance samples. They are tighter than the ELBO and converge to \(\log p(y)\) as \(K\to\infty\).</li>
+          <li>The ELBO decomposes over \(n\) because the \(q_n\) are independent. That's why EM parallelizes, and why stochastic/online EM works on minibatches.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>Jensen's inequality on the log curve</h3>
+    <div class="panel">
+      <p class="hint">Two values \(a\) and \(b\) are averaged with weights \(q\) and \(1-q\). The <span style="color:var(--bnd)">blue dot</span> is \(q\log a + (1-q)\log b\), which lies on the chord. The <span style="color:var(--obj)">red dot</span> is \(\log(q a + (1-q) b)\), which lies on the curve. The red dot is never below the blue one. In EM, \(a\) and \(b\) play the roles of the ratios \(p(y,z)/q(z)\) for the two values of \(z\).</p>
+      <div class="two">
+        <svg class="plot" id="jen-plot" viewBox="0 0 420 300" aria-label="log curve with a chord showing Jensen's inequality"></svg>
+        <div>
+          <div class="ctrl"><label for="jen-a">a</label><input type="range" id="jen-a" min="0.2" max="6" step="0.05" value="0.8"><output id="jen-a-o"></output></div>
+          <div class="ctrl"><label for="jen-b">b</label><input type="range" id="jen-b" min="0.2" max="6" step="0.05" value="5"><output id="jen-b-o"></output></div>
+          <div class="ctrl"><label for="jen-q">weight q on a</label><input type="range" id="jen-q" min="0" max="1" step="0.01" value="0.5"><output id="jen-q-o"></output></div>
+          <div class="btns"><button class="b" id="jen-eq">Make a = b (gap → 0)</button></div>
+          <div class="readout">
+            <div class="stat o"><div class="k">log(average)</div><div class="v" id="jen-la"></div></div>
+            <div class="stat b"><div class="k">average(log)</div><div class="v" id="jen-al"></div></div>
+            <div class="stat a"><div class="k">gap ≥ 0</div><div class="v" id="jen-gap"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>Equations 8.146 – 8.150</h3>
+    <div class="mathcard">
+      <h4>The objective, and why it's awkward</h4>
+      <div class="eq">\[ \class{to}{\ell(\theta)} = \sum_{n=1}^N \log p(y_n\mid\theta) = \sum_{n=1}^N \log\Big[\sum_{z_n} p(y_n,z_n\mid\theta)\Big] \tag{8.146} \]</div>
+      <p>The hidden \(z_n\) has to be summed out ("marginalized"), so we get a <b>log of a sum</b>. You can't split \(\log(A+B)\) into separate pieces, so the parameters of different clusters stay tangled together.</p>
+      <h4>Multiply by one</h4>
+      <div class="eq">\[ \class{to}{\ell(\theta)} = \sum_n \log\Big[\sum_{z_n} \class{tm}{q_n(z_n)}\,\frac{p(y_n,z_n\mid\theta)}{\class{tm}{q_n(z_n)}}\Big] \tag{8.147} \]</div>
+      <p>Nothing has changed: \(q/q = 1\). But the inside is now an <b>average</b> of the ratios \(p/q\), weighted by \(q\).</p>
+      <h4>Push the log through the average</h4>
+      <div class="eq">\[ \class{to}{\ell(\theta)} \;\ge\; \sum_n\sum_{z_n} \class{tm}{q_n(z_n)}\log\frac{p(y_n,z_n\mid\theta)}{\class{tm}{q_n(z_n)}} \tag{8.148} \]</div>
+      <div class="refresh"><div class="ttl">Refresher · Jensen's inequality</div>For a concave \(f\) (like \(\log\)): \(f(\mathbb E[X]) \ge \mathbb E[f(X)]\). The chord between two points on a concave curve lies under the curve. Equality holds when \(X\) is constant.</div>
+      <h4>Name the two pieces</h4>
+      <div class="eq">\[ = \sum_n \Big( \underbrace{\mathbb E_{q_n}\big[\log p(y_n,z_n\mid\theta)\big]}_{\text{expected complete-data log-lik.}} + \underbrace{\mathbb H(q_n)}_{\text{entropy of } q_n} \Big) = \sum_n \class{tb}{Ł(\theta,q_n)} \tag{8.149–8.150} \]</div>
+      <ol class="steps">
+        <li><div>\(\log\frac{p}{q} = \log p - \log q\), so the sum splits in two. <span class="why">Linearity of expectation.</span></div></li>
+        <li><div>\(-\sum_z q(z)\log q(z)\) is the entropy \(\mathbb H(q)\). <span class="why">It doesn't involve θ at all, which matters for the M step.</span></div></li>
+        <li><div>The result is the <b>ELBO</b>, the evidence lower bound. The "evidence" is \(\log p(y_{1:N}\mid\theta)\). <span class="why">This same quantity drives variational inference (§4.6.8.3).</span></div></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>The lower bound</h3><div class="quizbox" data-quiz="lb"></div></div>
+</section>
+
+<!-- ============ 8.7.2.2 E step ============ -->
+<section class="sec" id="estep">
+  <div class="sec-head"><span class="secnum">§8.7.2.2</span><h2>E step: choose q to close the gap</h2></div>
+  <div class="intro">
+    <p>The ELBO holds for <i>any</i> \(q\). Which \(q\) makes it best? Rewriting it shows the answer: the gap between the ELBO and the true log-likelihood is a KL divergence, and that's zero exactly when \(q\) is the posterior \(p(z\mid y,\theta)\).</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">This step is where you make your best guess about the hidden stuff.</p>
+        <p>Say a cookie is very chocolatey. Rosie's cookies are usually very chocolatey and Blue Door's usually aren't, so you'd guess "probably Rosie's, maybe 80%." If the cookie were halfway in between, you'd say "50/50."</p>
+        <p>The "floor" from before has a gap under the real answer, and the gap is a measure of <b>how wrong your guesses are</b>. When your guesses are exactly as sure as they should be, the gap disappears and the floor touches the real answer.</p>
+      </div>
+      <div data-l="2">
+        <p>For one data point \(y\), the E step asks: what's the probability it came from cluster 1 vs cluster 2? Bayes' rule says</p>
+        <p>\(P(\text{cluster }1\mid y)=\dfrac{\text{prior}_1\times\text{likelihood}_1}{\text{prior}_1\times\text{likelihood}_1+\text{prior}_2\times\text{likelihood}_2}\).</p>
+        <p>In the Play box, the slider \(q\) is <i>your</i> guess for cluster 1. The ELBO curve peaks, and touches the true log-probability line, exactly at the Bayes answer. Any other guess leaves an amber gap. That gap is called the KL divergence, a "distance" between your guess and the right answer that is never negative.</p>
+      </div>
+      <div data-l="3">
+        <p>Use \(p(y,z\mid\theta)=p(z\mid y,\theta)\,p(y\mid\theta)\) inside the ELBO for one example:</p>
+        <p>\(\text{Ł}(\theta,q)=\sum_z q(z)\log\frac{p(z\mid y,\theta)}{q(z)}+\log p(y\mid\theta)=-D_{\mathbb{KL}}\big(q\,\|\,p(z\mid y,\theta)\big)+\log p(y\mid\theta)\).</p>
+        <p>The second term doesn't depend on \(q\). The KL term is \(\ge 0\) and equals 0 iff \(q=p(z\mid y,\theta)\). So the maximizing \(q\) is the posterior, and the bound is then <b>tight</b>: \(\text{Ł}(\theta^t,\{q^*_n\})=\ell(\theta^t)\). Setting \(Q(\theta,\theta^t)=\text{Ł}(\theta,\{p(z_n\mid y_n,\theta^t)\})\) gives exactly the minorizer MM needs.</p>
+      </div>
+      <div data-l="4">
+        <p>The E step is the I-projection of the posterior onto an unrestricted family, which is just the posterior. After the M step moves to \(\theta\ne\theta^t\), the gap is \(\sum_n D_{\mathbb{KL}}\big(p(z_n\mid y_n,\theta^t)\,\|\,p(z_n\mid y_n,\theta)\big)\). This explains slow convergence: when the posterior barely changes with \(\theta\), the bound is nearly tight everywhere but also nearly flat in the "missing" directions.</p>
+        <ul>
+          <li>The E step only needs whatever statistics the M step consumes. For exponential families, that's \(\sum_n\mathbb E_{q_n}[T(y_n,z_n)]\).</li>
+          <li>Intractable posterior (HMM with huge state space, factorial models, LDA): replace \(q\) by a mean-field or structured approximation. That's variational EM, and the bound is no longer tight, so monotonicity holds for the ELBO, not for \(\ell\). Sampling gives MCEM/SAEM.</li>
+          <li>Numerics: compute \(r_{nk}\) with log-sum-exp. Underflow in \(\pi_kp(y_n\mid\theta_k)\) is the most common EM bug in high dimensions.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>One data point, one guess q, one gap</h3>
+    <div class="panel">
+      <p class="hint">Two clusters at \(\mu_1=-1.5\) (red) and \(\mu_2=1.5\) (blue), σ = 1. Move the data point \(y\), then move your guess \(q = q(z{=}1)\). The right plot shows the ELBO as a function of \(q\). It always stays under the dashed red line \(\log p(y\mid\theta)\) and touches it only at the posterior.</p>
+      <div class="two-even">
+        <div><p class="cap">the mixture and the point y (dot heights = π_k · N(y | μ_k, 1))</p><svg class="plot" id="es-mix" viewBox="0 0 380 240" aria-label="Mixture density with a data point"></svg></div>
+        <div><p class="cap">ELBO(q) vs your guess q</p><svg class="plot" id="es-elbo" viewBox="0 0 380 240" aria-label="ELBO as a function of q"></svg></div>
+      </div>
+      <div class="ctrl"><label for="es-y">data point y</label><input type="range" id="es-y" min="-4" max="4" step="0.05" value="-0.6"><output id="es-y-o"></output></div>
+      <div class="ctrl"><label for="es-pi">prior π₁</label><input type="range" id="es-pi" min="0.05" max="0.95" step="0.01" value="0.5"><output id="es-pi-o"></output></div>
+      <div class="ctrl"><label for="es-q">your guess q(z=1)</label><input type="range" id="es-q" min="0.001" max="0.999" step="0.001" value="0.3"><output id="es-q-o"></output></div>
+      <div class="btns"><button class="b e" id="es-do">E step: set q = posterior</button></div>
+      <div class="readout">
+        <div class="stat m"><div class="k">posterior p(z=1|y)</div><div class="v" id="es-post"></div></div>
+        <div class="stat o"><div class="k">log p(y|θ)</div><div class="v" id="es-lp"></div></div>
+        <div class="stat b"><div class="k">ELBO(q)</div><div class="v" id="es-elb"></div></div>
+        <div class="stat a"><div class="k">KL(q ‖ posterior)</div><div class="v" id="es-kl"></div></div>
+      </div>
+      <div class="chain" id="es-chain"></div>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>Equations 8.151 – 8.156</h3>
+    <div class="mathcard">
+      <h4>Rewrite one term of the ELBO</h4>
+      <div class="eq">\[ \class{tb}{Ł(\theta,q_n)} = \sum_{z_n} q_n(z_n)\log\frac{p(y_n,z_n\mid\theta)}{q_n(z_n)} \tag{8.151} \]</div>
+      <ol class="steps">
+        <li><div>\(\displaystyle = \sum_{z_n} q_n(z_n)\log\frac{p(z_n\mid y_n,\theta)\,p(y_n\mid\theta)}{q_n(z_n)}\) <span class="why">(8.152) The product rule: joint = posterior × evidence.</span></div></li>
+        <li><div>\(\displaystyle = \sum_{z_n} q_n(z_n)\log\frac{p(z_n\mid y_n,\theta)}{q_n(z_n)} + \sum_{z_n} q_n(z_n)\log p(y_n\mid\theta)\) <span class="why">(8.153) Log of a product is a sum of logs.</span></div></li>
+        <li><div>\(\displaystyle = -\class{ta}{D_{\mathbb{KL}}\big(q_n(z_n)\,\|\,p(z_n\mid y_n,\theta)\big)} + \class{to}{\log p(y_n\mid\theta)}\) <span class="why">(8.154) The first sum is minus a KL divergence. In the second, \(\log p(y_n\mid\theta)\) has no \(z_n\) in it and \(\sum q_n = 1\).</span></div></li>
+      </ol>
+      <div class="eq">\[ \class{to}{\log p(y_n\mid\theta)} = \class{tb}{Ł(\theta,q_n)} + \class{ta}{D_{\mathbb{KL}}\big(q_n\,\|\,p(z_n\mid y_n,\theta)\big)} \]</div>
+      <p>The true value equals the bound plus the gap. Because \(D_{\mathbb{KL}}\ge0\) with equality iff the two distributions match, the best choice is</p>
+      <div class="eq">\[ q_n^*(z_n) = p(z_n\mid y_n,\theta) \quad\Longrightarrow\quad Ł(\theta,\{q_n^*\}) = \sum_n \log p(y_n\mid\theta) = \class{to}{\ell(\theta)} \tag{8.155} \]</div>
+      <h4>Connecting to MM</h4>
+      <div class="eq">\[ \class{tb}{Q(\theta,\theta^t)} = Ł\big(\theta, \{p(z_n\mid y_n,\theta^t)\}\big) \tag{8.156} \]</div>
+      <p>Freeze the \(q\)'s at the posterior computed with the <i>old</i> parameters \(\theta^t\), and view the ELBO as a function of the <i>new</i> \(\theta\). It's tight at \(\theta=\theta^t\) and a lower bound everywhere else, so it's a minorizer. If you can only approximate the posterior, the bound isn't tight, and that's <b>variational EM</b>.</p>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>E step</h3><div class="quizbox" data-quiz="estep"></div></div>
+</section>
+
+<!-- ============ 8.7.2.3 M step ============ -->
+<section class="sec" id="mstep">
+  <div class="sec-head"><span class="secnum">§8.7.2.3</span><h2>M step: fit the model with soft, fractional labels</h2></div>
+  <div class="intro">
+    <p>With the \(q\)'s frozen, the entropy term is a constant. What's left, the <b>expected complete-data log-likelihood</b>, is a weighted version of an ordinary fully observed MLE problem, and for exponential families it has a closed-form answer.</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">Now pretend your guesses are true, and fix up your idea of each bakery.</p>
+        <p>If a cookie is "80% Rosie's," it counts as 0.8 of a cookie in Rosie's pile and 0.2 of a cookie in Blue Door's pile. Then you find the middle of each pile, like balancing a seesaw: heavier cookies pull the balance point toward them.</p>
+        <p>That balance point is your new idea of "Rosie's usual cookie."</p>
+      </div>
+      <div data-l="2">
+        <p>Each point \(y_n\) has a weight \(r_{nk}\) for cluster \(k\), its probability from the E step. The new center of cluster \(k\) is the <b>weighted average</b>:</p>
+        <p>\(\mu_k = \dfrac{r_{1k}y_1 + r_{2k}y_2 + \dots}{r_{1k}+r_{2k}+\dots}\)</p>
+        <p>The new spread is the weighted average of squared distances from that center, and the new mixing weight \(\pi_k\) is the cluster's share of the total weight. In the Play box, drag μ and watch the score curve. Its peak sits exactly at the weighted average, the "balance point."</p>
+      </div>
+      <div data-l="3">
+        <p>The M step objective is \(\ell^t(\theta)=\sum_n\mathbb E_{q_n^t}[\log p(y_n,z_n\mid\theta)]\). We dropped \(\mathbb H(q_n^t)\), which doesn't depend on θ. Because \(\log\) now sits <i>inside</i> the expectation, the joint factorizes and each cluster's parameters separate. Setting \(\partial/\partial\mu_k=0\) for a Gaussian gives the weighted mean.</p>
+        <p>For an exponential family \(p(y,z\mid\theta)\propto\exp(T(y,z)^\top\theta - A(\theta))\), the objective is \(\sum_n\mathbb E[T(y_n,z_n)]^\top\theta - NA(\theta)\). Setting the gradient to zero gives \(\nabla A(\theta)=\frac1N\sum_n\mathbb E[T]\). That's <b>moment matching</b> on the <b>expected sufficient statistics</b>. So the E step only needs to hand over \(\sum_n\mathbb E[T(y_n,z_n)]\), not every posterior.</p>
+      </div>
+      <div data-l="4">
+        <p>Only <i>improvement</i> is needed for monotonicity: \(Q(\theta^{t+1},\theta^t)\ge Q(\theta^t,\theta^t)\). That gives generalized EM (one gradient step), ECM (conditional maximizations over parameter blocks, e.g. means then covariances), and ECME.</p>
+        <ul>
+          <li><b>MAP:</b> add \(\log p(\theta)\) to the M step objective. The E step is unchanged, and conjugate priors keep it closed-form (this is how the collapsing-variance problem in §8.7.3.4 is fixed).</li>
+          <li><b>Sufficient-statistic form</b> is what makes stochastic/online EM work: keep a running average \(\bar s \leftarrow (1-\rho_t)\bar s + \rho_t\,\mathbb E[T]\) and apply the M step map to \(\bar s\) (Cappé &amp; Moulines 2009).</li>
+          <li>Louis' identity recovers the observed information (standard errors) from complete-data quantities: \(I_o = I_c - I_m\).</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>The M step as a weighted balance point</h3>
+    <div class="panel">
+      <p class="hint">The current guess \(\theta^t\) (thin curves) gives each point a responsibility, drawn as a stacked bar: <span style="color:var(--c1)">red</span> share for cluster 1, <span style="color:var(--c2)">blue</span> for cluster 2. <b>Drag the points</b> left or right. Pick a cluster and slide its candidate mean μ. The lower plot shows that cluster's part of the M step objective, which peaks at the weighted average. <b>M step</b> fits all parameters at once (dashed curves). <b>Accept</b> makes them the new θᵗ and reruns the E step.</p>
+      <svg class="plot" id="ms-data" viewBox="0 0 640 230" aria-label="Data points with responsibility bars and mixture components. Drag points horizontally."></svg>
+      <div class="btns" style="margin-top:6px">
+        <span class="lab">cluster:</span>
+        <div class="seg" id="ms-k"><button data-k="0" class="on">1 (red)</button><button data-k="1">2 (blue)</button></div>
+      </div>
+      <div class="ctrl"><label for="ms-mu">candidate μ</label><input type="range" id="ms-mu" min="-4" max="4" step="0.01" value="0"><output id="ms-mu-o"></output></div>
+      <svg class="plot" id="ms-obj" viewBox="0 0 640 150" aria-label="Expected complete-data log-likelihood as a function of the candidate mean"></svg>
+      <div class="btns">
+        <button class="b mm" id="ms-best">Jump μ to the best value</button>
+        <button class="b pri" id="ms-m">M step (all parameters)</button>
+        <button class="b e" id="ms-accept" disabled>Accept → new E step</button>
+        <button class="b" id="ms-reset">Reset</button>
+      </div>
+      <div class="scroll" style="margin-top:14px"><table class="t" id="ms-tab"></table></div>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>Equations 8.157 – 8.159</h3>
+    <div class="mathcard">
+      <h4>Drop what doesn't depend on θ</h4>
+      <div class="eq">\[ Ł(\theta,\{q_n^t\}) = \sum_n \mathbb E_{q_n^t}\big[\log p(y_n,z_n\mid\theta)\big] + \underbrace{\sum_n \mathbb H(q_n^t)}_{\text{constant in }\theta} \]</div>
+      <div class="eq">\[ \ell^t(\theta) = \sum_n \mathbb E_{q_n^t(z_n)}\big[\log p(y_n,z_n\mid\theta)\big] \tag{8.157} \]</div>
+      <p>This is the <b>expected complete-data log-likelihood</b>. "Complete data" means we act as if \(z_n\) were observed, and "expected" means we average over our uncertainty about it.</p>
+      <h4>Exponential family: it all comes down to averages</h4>
+      <div class="eq">\[ \ell^t(\theta) = \sum_n \Big(\class{tm}{\mathbb E\big[T(y_n,z_n)\big]}^{\!\top}\theta - A(\theta)\Big) \tag{8.158} \]</div>
+      <ol class="steps">
+        <li><div>Exponential family: \(\log p(y,z\mid\theta) = T(y,z)^\top\theta - A(\theta) + \text{const}\). <span class="why">\(T\) is the sufficient statistic, \(A\) the log-partition function.</span></div></li>
+        <li><div>Expectation is linear and \(\theta\) is not random, so \(\mathbb E\) passes through to hit only \(T\). <span class="why">These \(\mathbb E[T]\) are the <b>expected sufficient statistics</b>.</span></div></li>
+        <li><div>Gradient \(=\sum_n \mathbb E[T] - N\nabla A(\theta) = 0\), so \(\nabla A(\theta) = \tfrac1N\sum_n\mathbb E[T]\). <span class="why">Since \(\nabla A(\theta)=\mathbb E_\theta[T]\), the model's expected statistics must match the data's expected statistics: moment matching.</span></div></li>
+      </ol>
+      <div class="eq">\[ \theta^{t+1} = \arg\max_\theta \sum_n \mathbb E_{q_n^t}\big[\log p(y_n,z_n\mid\theta)\big] \tag{8.159} \]</div>
+      <div class="note">That's why the table in the Play box only needs three running sums per cluster, \(\sum_n r_{nk}\), \(\sum_n r_{nk}y_n\) and \(\sum_n r_{nk}y_n^2\), to produce \(\pi_k\), \(\mu_k\) and \(\sigma_k^2\). The E step can hand over just those sums.</div>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>M step</h3><div class="quizbox" data-quiz="mstep"></div></div>
+</section>
+
+<!-- ============ 8.7.3 GMM ============ -->
+<section class="sec" id="gmm">
+  <div class="sec-head"><span class="secnum">§8.7.3</span><h2>Example: EM for a Gaussian mixture on Old Faithful</h2></div>
+  <div class="intro">
+    <p>272 eruptions of the Old Faithful geyser: eruption length (x) against waiting time until the next eruption (y), both standardized. We fit two 2-D Gaussians, starting exactly where the book does: \(\mu_1=(-1,1)\), \(\mu_2=(1,-1)\), \(\Sigma_1=\Sigma_2=I\).</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">Old Faithful is a geyser that shoots water into the air over and over.</p>
+        <p>Sometimes it does a short burst and then rests a short time. Sometimes it does a long burst and then rests a long time. Each dot on the picture is one eruption. We want the computer to find the two kinds by itself.</p>
+        <p>We start with two "blobs" in silly places. Then we repeat: <b>color</b> each dot red or blue (or purple if unsure) by which blob it fits better, then <b>move and stretch</b> each blob to cover its colored dots. Press "Run" and watch the blobs find the two groups.</p>
+      </div>
+      <div data-l="2">
+        <p>Each Gaussian blob has a <b>center</b> (mean), a <b>shape</b> (covariance: how wide, how tilted) and a <b>share</b> \(\pi_k\) of the data.</p>
+        <ul><li><b>E step:</b> for every dot, compute "how likely is this dot under blob 1 × blob 1's share" and the same for blob 2, then divide each by the total. That gives the dot's red/blue color mix.</li><li><b>M step:</b> each blob's new center is the color-weighted average of all dots, its new shape is the color-weighted spread, and its new share is its total color divided by 272.</li></ul>
+        <p>Watch the bottom chart: the log-likelihood only ever goes up. Then turn on the "bug" and see it go down. That's how you'd catch a mistake in your own code.</p>
+      </div>
+      <div data-l="3">
+        <p>E step (8.160): \(r_{nk}=\pi_k\mathcal N(y_n\mid\mu_k,\Sigma_k)\big/\sum_{k'}\pi_{k'}\mathcal N(y_n\mid\mu_{k'},\Sigma_{k'})\). M step (8.165–8.167): weighted mean, weighted scatter, and \(\pi_k=r_k/N\) where \(r_k=\sum_n r_{nk}\).</p>
+        <p>Each M step is a weighted MVN MLE because the expected complete-data log-likelihood (8.164) splits into one weighted Gaussian term per cluster plus a multinomial term for \(\pi\).</p>
+        <p><b>Relation to K-means:</b> fix \(\Sigma_k=\sigma^2I\), \(\pi_k=1/K\), and let \(\sigma\to0\). The responsibilities become hard 0/1 assignments to the nearest mean, and EM becomes K-means.</p>
+      </div>
+      <div data-l="4">
+        <ul>
+          <li><b>Cost per iteration:</b> \(O(NKD^2 + KD^3)\). Use Cholesky factors and log-sum-exp for \(r_{nk}\). Diagonal or tied covariances trade flexibility for stability.</li>
+          <li><b>Initialization matters:</b> the likelihood is multimodal (\(\ge K!\) symmetric modes from label switching, plus genuinely different local optima). Use K-means++ seeding and multiple restarts.</li>
+          <li><b>Degeneracy:</b> the MLE is unbounded (a component can collapse onto one point, \(\sigma\to0\)). In practice, use the MAP/NIW prior from §8.7.3.4 or a covariance floor.</li>
+          <li><b>Slow phases:</b> the long plateau before iteration ~30 here is the classic overlapping-cluster regime. The EM map's Jacobian has eigenvalues near 1 (high missing-information fraction). Acceleration or a few Newton/L-BFGS steps on \(\ell\) help.</li>
+          <li><b>Standardizing</b> the data (done here) evens out the curvature across dimensions and noticeably speeds convergence.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>Figure 8.25, step by step</h3>
+    <div class="panel">
+      <p class="hint">Dots are colored by responsibility: red = cluster 1, blue = cluster 2, purple = about 50/50. Ellipses show 1σ and 2σ contours. Press <b>E step</b> and <b>M step</b> one at a time to see which step changes what, or <b>Run</b>. <b>Hover or tap a dot</b> to see its E step arithmetic. <b>Drag a center (✚)</b> to try your own initialization.</p>
+      <div class="two gmm-two">
+        <div><svg class="plot" id="gmm-plot" viewBox="0 0 460 440" aria-label="Old Faithful data colored by cluster responsibility with Gaussian ellipses"></svg></div>
+        <div>
+          <div class="btns" style="margin-top:0">
+            <button class="b e" id="gmm-e">E step</button>
+            <button class="b mm" id="gmm-m">M step</button>
+            <button class="b pri" id="gmm-run">Run</button>
+            <button class="b" id="gmm-reset">Reset</button>
+          </div>
+          <div class="btns"><span class="lab">jump to iteration:</span><button class="b" data-jump="0">0</button><button class="b" data-jump="10">10</button><button class="b" data-jump="25">25</button><button class="b" data-jump="30">30</button><button class="b" data-jump="35">35</button><button class="b" data-jump="40">40</button><button class="b" data-jump="80">80</button></div>
+          <div class="btns"><label class="chk"><input type="checkbox" id="gmm-bug"> inject a bug: divide Σ by 2·rₖ instead of rₖ</label></div>
+          <div class="phase" id="gmm-phase"></div>
+          <div class="readout">
+            <div class="stat"><div class="k">iteration</div><div class="v" id="gmm-it"></div></div>
+            <div class="stat o"><div class="k">ℓ(θ)</div><div class="v" id="gmm-ll"></div></div>
+          </div>
+          <div class="scroll" style="margin-top:12px"><table class="t" id="gmm-tab"></table></div>
+          <div class="hover-info" id="gmm-hover">Hover or tap a dot.</div>
+        </div>
+      </div>
+      <p class="cap" style="margin-top:14px">ℓ(θᵗ) after each M step. Any drop is drawn in red and means a bug.</p>
+      <svg class="plot" id="gmm-trace" viewBox="0 0 640 120" aria-label="Log-likelihood over EM iterations"></svg>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>Equations 8.160 – 8.167</h3>
+    <div class="mathcard">
+      <h4>E step: responsibilities</h4>
+      <div class="eq">\[ r_{nk}^{(t)} = p(z_n = k\mid y_n,\theta^{(t)}) = \frac{\pi_k^{(t)}\, p(y_n\mid\theta_k^{(t)})}{\sum_{k'}\pi_{k'}^{(t)}\, p(y_n\mid\theta_{k'}^{(t)})} \tag{8.160} \]</div>
+      <p>Bayes' rule with prior \(\pi_k\) and likelihood \(\mathcal N(y_n\mid\mu_k,\Sigma_k)\). The hover box in the Play panel shows these numbers for any dot.</p>
+      <h4>M step objective</h4>
+      <p>Write \(z_n\) one-hot: \(z_{nk}=\mathbb I(z_n=k)\). Then \(p(z_n\mid\pi)=\prod_k\pi_k^{z_{nk}}\) and \(p(y_n\mid z_n,\theta)=\prod_k\mathcal N(y_n\mid\mu_k,\Sigma_k)^{z_{nk}}\). The one-hot exponent "selects" the right cluster.</p>
+      <ol class="steps">
+        <li><div>\(\displaystyle \ell^t(\theta)=\mathbb E\Big[\sum_n\log\prod_k\pi_k^{z_{nk}}+\sum_n\log\prod_k\mathcal N(y_n\mid\mu_k,\Sigma_k)^{z_{nk}}\Big]\) <span class="why">(8.161–8.162) Joint = prior on z × likelihood of y given z.</span></div></li>
+        <li><div>\(\displaystyle =\sum_n\sum_k \mathbb E[z_{nk}]\log\pi_k+\sum_n\sum_k\mathbb E[z_{nk}]\log\mathcal N(y_n\mid\mu_k,\Sigma_k)\) <span class="why">(8.163) Log turns the product into a sum, the exponent comes down, and expectation hits only \(z_{nk}\).</span></div></li>
+        <li><div>\(\displaystyle =\sum_n\sum_k r_{nk}\log\pi_k-\tfrac12\sum_n\sum_k r_{nk}\big[\log|\Sigma_k|+(y_n-\mu_k)^\top\Sigma_k^{-1}(y_n-\mu_k)\big]+\text{const}\) <span class="why">(8.164) \(\mathbb E[z_{nk}]=r_{nk}\), and we expand the Gaussian log-density.</span></div></li>
+      </ol>
+      <p>Each cluster now has its own separate weighted-Gaussian problem.</p>
+      <h4>M step solutions</h4>
+      <div class="eq">\[ \class{t1}{\mu_k^{(t+1)}} = \frac{\sum_n r_{nk}^{(t)}\,y_n}{r_k^{(t)}} \tag{8.165} \]</div>
+      <div class="eq">\[ \Sigma_k^{(t+1)} = \frac{\sum_n r_{nk}^{(t)}\,(y_n-\mu_k^{(t+1)})(y_n-\mu_k^{(t+1)})^\top}{r_k^{(t)}} = \frac{\sum_n r_{nk}^{(t)}\,y_ny_n^\top}{r_k^{(t)}} - \mu_k^{(t+1)}(\mu_k^{(t+1)})^\top \tag{8.166} \]</div>
+      <div class="eq">\[ \pi_k^{(t+1)} = \frac1N\sum_n r_{nk}^{(t)} = \frac{r_k^{(t)}}{N}, \qquad r_k^{(t)} \triangleq \sum_n r_{nk}^{(t)} \tag{8.167} \]</div>
+      <ul>
+        <li>\(r_k\) is the "effective number of points" in cluster \(k\), a soft count.</li>
+        <li>The mean is the soft-weighted average and the covariance is the soft-weighted scatter. Set \(\partial/\partial\mu_k=0\) and you get \(\sum_n r_{nk}\Sigma_k^{-1}(y_n-\mu_k)=0\).</li>
+        <li>For \(\pi\), maximize \(\sum_k r_k\log\pi_k\) subject to \(\sum_k\pi_k=1\) (Lagrange multiplier). This is the categorical MLE with soft counts.</li>
+      </ul>
+      <div class="note">The "bug" toggle divides the scatter by \(2r_k\), so every M step shrinks the covariances to half the correct value. That's no longer the argmax of \(Q\), so the chain in Eq. 8.145 breaks at link ②, and the trace shows drops.</div>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>EM for a GMM</h3><div class="quizbox" data-quiz="gmm"></div></div>
+</section>
+
+<!-- ============ CHEAT SHEET ============ -->
+<section class="sec" id="cheat">
+  <div class="sec-head"><span class="secnum">—</span><h2>Cheat sheet</h2></div>
+  <div class="block">
+    <div class="panel scroll">
+      <table class="vs">
+        <thead><tr><th></th><th>In words</th><th>In symbols</th></tr></thead>
+        <tbody>
+          <tr><th>Goal</th><td>Maximize the log-likelihood of what we can see.</td><td>\(\ell(\theta)=\sum_n\log\sum_{z_n}p(y_n,z_n\mid\theta)\)</td></tr>
+          <tr><th>MM recipe</th><td>Build a floor that touches at the current guess, then climb it.</td><td>\(Q\le\ell,\; Q(\theta^t,\theta^t)=\ell(\theta^t),\; \theta^{t+1}=\arg\max Q\)</td></tr>
+          <tr><th>Guarantee</th><td>The objective never goes down. If it does, you have a bug.</td><td>\(\ell(\theta^{t+1})\ge Q(\theta^{t+1},\theta^t)\ge Q(\theta^t,\theta^t)=\ell(\theta^t)\)</td></tr>
+          <tr><th>ELBO</th><td>Jensen: log of an average ≥ average of logs.</td><td>\(\ell\ge\sum_n\mathbb E_{q_n}[\log p(y_n,z_n\mid\theta)]+\mathbb H(q_n)\)</td></tr>
+          <tr><th>The gap</th><td>Bound + mismatch of q = truth.</td><td>\(\log p(y_n\mid\theta)=Ł(\theta,q_n)+D_{\mathbb{KL}}(q_n\|p(z_n\mid y_n,\theta))\)</td></tr>
+          <tr><th>E step</th><td>Guess the hidden labels, as probabilities.</td><td>\(q_n=p(z_n\mid y_n,\theta^t)\)</td></tr>
+          <tr><th>M step</th><td>Refit as if the guesses were data, with fractional weights.</td><td>\(\arg\max_\theta\sum_n\mathbb E_{q_n}[\log p(y_n,z_n\mid\theta)]\)</td></tr>
+          <tr><th>Exp. family</th><td>The E step just hands over averaged sufficient statistics.</td><td>\(\nabla A(\theta)=\tfrac1N\sum_n\mathbb E[T(y_n,z_n)]\)</td></tr>
+          <tr><th>GMM E</th><td>Color each point by cluster, using Bayes' rule.</td><td>\(r_{nk}\propto\pi_k\mathcal N(y_n\mid\mu_k,\Sigma_k)\)</td></tr>
+          <tr><th>GMM M</th><td>Weighted mean, weighted scatter, share of weight.</td><td>\(\mu_k=\tfrac{\sum r_{nk}y_n}{r_k},\;\Sigma_k=\tfrac{\sum r_{nk}(y_n-\mu_k)(\cdot)^\top}{r_k},\;\pi_k=\tfrac{r_k}{N}\)</td></tr>
+          <tr><th>vs Newton</th><td>Newton fits curvature exactly but isn't a bound, so it can overshoot or go downhill.</td><td>\(\theta-\ell'/\ell''\) vs. \(\theta+\ell'/L\)</td></tr>
+          <tr><th>Caveats</th><td>Only a local optimum. Speed depends on how much is missing.</td><td>Rate \(\approx\) fraction of missing information</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <footer>Built as a study companion for Murphy, <i>Probabilistic Machine Learning: An Introduction</i> (MIT Press, CC-BY-NC-ND), §8.7. Old Faithful data from R's <code>datasets::faithful</code> (Härdle 1991; Azzalini &amp; Bowman 1990).</footer>
+</section>
+</main>
+</div>
+
+<script>
+(function () {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function txt(parent, x, y, s, cls, extra) { const t = el('text', Object.assign({ x, y, class: cls || 'ax' }, extra || {}), parent); t.textContent = s; return t; }
+const lin = (d0, d1, r0, r1) => v => r0 + (v - d0) / (d1 - d0) * (r1 - r0);
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const f2 = v => (Math.abs(v) < 1e-12 ? 0 : v).toFixed(2), f3 = v => (Math.abs(v) < 1e-12 ? 0 : v).toFixed(3);
+const LOG2PI = Math.log(2 * Math.PI);
+const lnorm = (y, m, s) => -0.5 * LOG2PI - Math.log(s) - 0.5 * ((y - m) / s) ** 2;
+const npdf = (y, m, s) => Math.exp(lnorm(y, m, s));
+const lse2 = (a, b) => { const m = Math.max(a, b); return m + Math.log(Math.exp(a - m) + Math.exp(b - m)); };
+const pathOf = (pts) => pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('');
+const svgPt = (svg, evt) => { const p = svg.createSVGPoint(); p.x = evt.clientX; p.y = evt.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const renderers = [];
+
+/* ---------- levels ---------- */
+const LEVELS = { 1: 'Kid', 2: 'High school', 3: 'Undergrad', 4: 'Grad / MLE' };
+let level = 3;
+try { const s = localStorage.getItem('em-lab-level'); if (s && LEVELS[s]) level = +s; } catch (e) {}
+$$('[data-lv]').forEach(card => {
+  const kids = [...card.children];
+  const tabs = document.createElement('div'); tabs.className = 'lvtabs'; tabs.setAttribute('role', 'tablist');
+  tabs.innerHTML = Object.entries(LEVELS).map(([k, v]) => `<button role="tab" data-tab="${k}">${v}</button>`).join('');
+  const body = document.createElement('div'); body.className = 'lvbody';
+  kids.forEach(k => body.appendChild(k));
+  card.appendChild(tabs); card.appendChild(body);
+  tabs.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) showCard(card, +b.dataset.tab); });
+});
+function showCard(card, l) {
+  $$('.lvbody > [data-l]', card).forEach(d => { d.hidden = +d.dataset.l !== l; });
+  $$('[data-tab]', card).forEach(b => { b.classList.toggle('on', +b.dataset.tab === l); b.setAttribute('aria-selected', +b.dataset.tab === l); });
+}
+function setLevel(l) {
+  level = l; try { localStorage.setItem('em-lab-level', l); } catch (e) {}
+  $$('[data-lv]').forEach(c => showCard(c, l));
+  $$('[data-setl]').forEach(b => b.classList.toggle('on', +b.dataset.setl === l));
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-setl]'); if (b) setLevel(+b.dataset.setl); });
+setLevel(level);
+
+/* =====================================================================
+   8.7.1  MM vs Newton
+   ===================================================================== */
+(function () {
+  const svg = $('#mm-plot'), tr = $('#mm-trace');
+  const W = 640, H = 300, m = { l: 44, r: 12, t: 14, b: 30 };
+  const X = lin(-4, 4, m.l, W - m.r), Xi = lin(m.l, W - m.r, -4, 4), Y = lin(-0.06, 0.36, H - m.b, m.t);
+  const g = (x, mu, s) => Math.exp(-0.5 * ((x - mu) / s) ** 2) / (s * Math.sqrt(2 * Math.PI));
+  const f = t => 0.3 * g(t, -1.9, 0.55) + 0.7 * g(t, 1.1, 0.95);
+  const h = 1e-4, d1 = t => (f(t + h) - f(t - h)) / (2 * h), d2 = t => (f(t + h) - 2 * f(t) + f(t - h)) / (h * h);
+  let L = 0; for (let t = -4; t <= 4; t += 0.005) L = Math.max(L, Math.abs(d2(t)));
+  const st = { th: 2.75, prev: null, hist: [2.75], c: 1, newton: false };
+  const cL = () => st.c * L;
+  const Qf = (t, a) => f(a) + d1(a) * (t - a) - cL() / 2 * (t - a) ** 2;
+  const next = a => Math.max(-4, Math.min(4, a + d1(a) / cL()));
+  const xs = []; for (let t = -4; t <= 4.0001; t += 0.02) xs.push(t);
+
+  function render() {
+    svg.innerHTML = '';
+    el('clipPath', { id: 'mmclip' }, el('defs', {}, svg)).appendChild(el('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b }));
+    for (let v = 0; v <= 0.3001; v += 0.1) { el('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: 'grid' }, svg); txt(svg, m.l - 6, Y(v) + 4, v.toFixed(1), 'ax', { 'text-anchor': 'end' }); }
+    for (let v = -4; v <= 4; v++) txt(svg, X(v), H - m.b + 16, v, 'ax', { 'text-anchor': 'middle' });
+    el('line', { x1: m.l, x2: W - m.r, y1: Y(0), y2: Y(0), class: 'base' }, svg);
+    txt(svg, X(3.5), H - m.b + 16, 'θ', 'axl', { 'text-anchor': 'middle' });
+    const gc = el('g', { 'clip-path': 'url(#mmclip)' }, svg);
+    const a = st.th, t1 = next(a);
+    // violation shading
+    let viol = false;
+    xs.forEach(t => { if (Qf(t, a) > f(t) + 1e-7) viol = true; });
+    if (viol) {
+      const top = [], bot = [];
+      xs.forEach(t => { const q = Qf(t, a), v = f(t); if (q > v + 1e-7) { top.push([X(t), Y(q)]); bot.push([X(t), Y(v)]); } else if (top.length) { el('path', { d: pathOf(top.concat(bot.reverse())) + 'Z', fill: cssv('--obj-soft'), stroke: 'none' }, gc); top.length = 0; bot.length = 0; } });
+      if (top.length) el('path', { d: pathOf(top.concat(bot.reverse())) + 'Z', fill: cssv('--obj-soft'), stroke: 'none' }, gc);
+    }
+    if (st.prev !== null) el('path', { d: pathOf(xs.map(t => [X(t), Y(Qf(t, st.prev))])), fill: 'none', stroke: 'var(--prev)', 'stroke-width': 2, 'stroke-dasharray': '2 4', 'stroke-linecap': 'round' }, gc);
+    el('path', { d: pathOf(xs.map(t => [X(t), Y(f(t))])), fill: 'none', stroke: 'var(--obj)', 'stroke-width': 2.5, 'stroke-dasharray': '7 5' }, gc);
+    el('path', { d: pathOf(xs.map(t => [X(t), Y(Qf(t, a))])), fill: 'none', stroke: 'var(--bnd)', 'stroke-width': 2.5 }, gc);
+    let nt = null;
+    if (st.newton) {
+      const c2 = d2(a), approx = t => f(a) + d1(a) * (t - a) + 0.5 * c2 * (t - a) ** 2;
+      el('path', { d: pathOf(xs.map(t => [X(t), Y(approx(t))])), fill: 'none', stroke: 'var(--gap)', 'stroke-width': 2, 'stroke-dasharray': '4 4' }, gc);
+      nt = a - d1(a) / c2;
+    }
+    // markers
+    el('line', { x1: X(t1), x2: X(t1), y1: Y(Qf(t1, a)), y2: Y(f(t1)), stroke: 'var(--green)', 'stroke-width': 3 }, svg);
+    el('circle', { cx: X(a), cy: Y(f(a)), r: 6, fill: 'var(--ink)', stroke: 'var(--surface)', 'stroke-width': 2 }, svg);
+    el('rect', { x: X(t1) - 5, y: Y(Qf(t1, a)) - 5, width: 10, height: 10, fill: 'var(--bnd)', stroke: 'var(--surface)', 'stroke-width': 1.5 }, svg);
+    el('circle', { cx: X(t1), cy: Y(f(t1)), r: 4.5, fill: 'var(--obj)', stroke: 'var(--surface)', 'stroke-width': 1.5 }, svg);
+    txt(svg, X(a), H - m.b - 6, 'θᵗ', 'lbl', { 'text-anchor': 'middle', fill: 'var(--ink)' });
+    if (Math.abs(X(t1) - X(a)) > 22) txt(svg, X(t1), H - m.b - 6, 'θᵗ⁺¹', 'lbl', { 'text-anchor': 'middle', fill: 'var(--bnd)' });
+    if (nt !== null) {
+      const ntc = Math.max(-4, Math.min(4, nt)), yy = Y(f(ntc));
+      el('path', { d: `M${X(ntc)},${yy - 7}L${X(ntc) + 7},${yy}L${X(ntc)},${yy + 7}L${X(ntc) - 7},${yy}Z`, fill: 'var(--gap)', stroke: 'var(--surface)', 'stroke-width': 1.5 }, svg);
+      if (nt < -4 || nt > 4) txt(svg, X(ntc) + (nt < -4 ? 10 : -10), yy - 10, (nt < -4 ? '← ' : '') + 'Newton → θ=' + nt.toFixed(1) + (nt > 4 ? ' →' : ''), 'lbl', { 'text-anchor': nt < -4 ? 'start' : 'end', fill: 'var(--gap)' });
+      $('#mm-nl').textContent = f3(f(nt)) + (f(nt) < f(a) ? ' ↓' : ' ↑');
+    } else $('#mm-nl').textContent = 'off';
+    // readouts
+    const l0 = f(a), q1 = Qf(t1, a), l1 = f(t1);
+    $('#mm-t').textContent = st.hist.length - 1;
+    $('#mm-l0').textContent = f3(l0); $('#mm-q1').textContent = f3(q1); $('#mm-l1').textContent = f3(l1);
+    const ok1 = l1 >= q1 - 1e-9, ok2 = q1 >= l0 - 1e-9;
+    $('#mm-chain').innerHTML = `next step: <span class="o">ℓ(θᵗ⁺¹)=${f3(l1)}</span> <span class="${ok1 ? 'ok' : 'bad'}">${ok1 ? '≥' : '<'}</span> <span class="b">Q(θᵗ⁺¹,θᵗ)=${f3(q1)}</span> <span class="ok">${ok2 ? '≥' : '<'}</span> <span class="b">Q(θᵗ,θᵗ)</span> = <span class="o">ℓ(θᵗ)=${f3(l0)}</span> &nbsp;→&nbsp; ${l1 >= l0 - 1e-9 ? '<span class="ok">✓ climb guaranteed</span>' : '<span class="bad">✗ objective drops: bound was not a lower bound</span>'}` + (viol && ok1 ? ' <span class="a">(bound pokes through somewhere, so no guarantee in general)</span>' : '');
+    // trace
+    tr.innerHTML = '';
+    const vals = st.hist.map(f), n = Math.max(10, vals.length - 1);
+    const TX = lin(0, n, m.l, W - m.r), TY = lin(0, 0.32, 80, 8);
+    el('line', { x1: m.l, x2: W - m.r, y1: 80, y2: 80, class: 'base' }, tr);
+    txt(tr, m.l - 6, 84, '0', 'ax', { 'text-anchor': 'end' }); txt(tr, m.l - 6, TY(0.3) + 4, '0.3', 'ax', { 'text-anchor': 'end' });
+    for (let i = 1; i < vals.length; i++) el('line', { x1: TX(i - 1), x2: TX(i), y1: TY(vals[i - 1]), y2: TY(vals[i]), stroke: vals[i] < vals[i - 1] - 1e-9 ? 'var(--obj)' : 'var(--green)', 'stroke-width': 2.5 }, tr);
+    vals.forEach((v, i) => el('circle', { cx: TX(i), cy: TY(v), r: 3, fill: 'var(--ink)' }, tr));
+  }
+  function step() { st.prev = st.th; st.th = next(st.th); st.hist.push(st.th); render(); }
+  function start(t) { st.th = t; st.prev = null; st.hist = [t]; render(); }
+  $('#mm-step').onclick = step;
+  $('#mm-run').onclick = () => { let k = 0; const go = () => { step(); if (++k < 10) setTimeout(go, reduceMotion ? 0 : 160); }; go(); };
+  $('#mm-reset').onclick = () => start(st.th);
+  $('#mm-newton').onchange = e => { st.newton = e.target.checked; render(); };
+  $$('[data-mmp]').forEach(b => b.onclick = () => { if (b.dataset.mmp !== '2.75') { st.newton = true; $('#mm-newton').checked = true; } start(+b.dataset.mmp); });
+  const cs = $('#mm-c'); const co = () => { st.c = +cs.value; $('#mm-c-o').textContent = st.c.toFixed(2) + '×'; };
+  cs.oninput = () => { co(); render(); }; co();
+  svg.addEventListener('pointerdown', e => { const p = svgPt(svg, e); if (p.x >= m.l && p.x <= W - m.r) start(Math.max(-3.95, Math.min(3.95, Xi(p.x)))); });
+  renderers.push(render); render();
+})();
+
+/* =====================================================================
+   8.7.2  EM loop in 1D (theta = mu1)
+   ===================================================================== */
+(function () {
+  const Yd = [-3.2, -2.7, -2.4, -2.1, -1.8, -1.5, -1.1, -0.6, 1.3, 1.8, 2.1, 2.5, 3.0, 3.4];
+  const svg = $('#loop-plot'), W = 640, H = 330, m = { l: 54, r: 12, t: 14, b: 66 };
+  const lo = -5, hi = 5;
+  const X = lin(lo, hi, m.l, W - m.r), Xi = lin(m.l, W - m.r, lo, hi);
+  const st = { mu2: 0.5, th: 4.2, anchor: null, hist: [], it: 0, timer: null };
+  const ell = t => Yd.reduce((s, y) => s + lse2(Math.log(.5) + lnorm(y, t, 1), Math.log(.5) + lnorm(y, st.mu2, 1)), 0);
+  const resp = a => Yd.map(y => { const l1 = Math.log(.5) + lnorm(y, a, 1), l2 = Math.log(.5) + lnorm(y, st.mu2, 1), z = lse2(l1, l2); return Math.exp(l1 - z); });
+  const Q = (t, a) => { const r = resp(a); return Yd.reduce((s, y, n) => { const r1 = r[n], r2 = 1 - r1; let v = r1 * (Math.log(.5) + lnorm(y, t, 1)) + r2 * (Math.log(.5) + lnorm(y, st.mu2, 1)); if (r1 > 0) v -= r1 * Math.log(r1); if (r2 > 0) v -= r2 * Math.log(r2); return s + v; }, 0); };
+  const argQ = a => { const r = resp(a); let s = 0, w = 0; Yd.forEach((y, n) => { s += r[n] * y; w += r[n]; }); return s / w; };
+  const xs = []; for (let t = lo; t <= hi + 1e-9; t += 0.04) xs.push(t);
+  let Y, yl, yh;
+  function scale() { const v = xs.map(ell); yh = Math.max(...v); yl = Math.min(...v); const pad = (yh - yl) * 0.08; yh += pad; yl -= pad * 2; Y = lin(yl, yh, H - m.b, m.t); }
+  function render() {
+    svg.innerHTML = '';
+    el('clipPath', { id: 'lpclip' }, el('defs', {}, svg)).appendChild(el('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b }));
+    const base10 = Math.pow(10, Math.floor(Math.log10(yh - yl))); const st5 = [0.1, 0.2, 0.5, 1].map(f => f * base10).find(v => (yh - yl) / v <= 7) || base10;
+    for (let v = Math.ceil(yl / st5) * st5; v <= yh; v += st5) { el('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: 'grid' }, svg); txt(svg, m.l - 6, Y(v) + 4, Math.round(v), 'ax', { 'text-anchor': 'end' }); }
+    for (let v = lo; v <= hi; v++) txt(svg, X(v), H - m.b + 15, v, 'ax', { 'text-anchor': 'middle' });
+    txt(svg, m.l - 6, m.t - 2, 'ℓ', 'axl', { 'text-anchor': 'end' });
+    const gc = el('g', { 'clip-path': 'url(#lpclip)' }, svg);
+    // older bounds
+    st.hist.slice(-3, -1).forEach(a => el('path', { d: pathOf(xs.map(t => [X(t), Y(Q(t, a))])), fill: 'none', stroke: 'var(--prev)', 'stroke-width': 1.6, 'stroke-dasharray': '2 4', opacity: .8 }, gc));
+    el('path', { d: pathOf(xs.map(t => [X(t), Y(ell(t))])), fill: 'none', stroke: 'var(--obj)', 'stroke-width': 2.5, 'stroke-dasharray': '7 5' }, gc);
+    // mu2 marker
+    el('line', { x1: X(st.mu2), x2: X(st.mu2), y1: m.t, y2: H - m.b, stroke: 'var(--c2)', 'stroke-width': 1, 'stroke-dasharray': '3 4' }, gc);
+    txt(svg, X(st.mu2) + 4, m.t + 12, 'μ₂ (fixed)', 'ax', { fill: 'var(--c2)' });
+    let qv = null;
+    if (st.anchor !== null) {
+      el('path', { d: pathOf(xs.map(t => [X(t), Y(Q(t, st.anchor))])), fill: 'none', stroke: 'var(--bnd)', 'stroke-width': 2.5 }, gc);
+      qv = Q(st.th, st.anchor);
+      const pk = argQ(st.anchor);
+      el('rect', { x: X(pk) - 4.5, y: Y(Q(pk, st.anchor)) - 4.5, width: 9, height: 9, fill: 'none', stroke: 'var(--bnd)', 'stroke-width': 2 }, svg);
+      if (Math.abs(ell(st.th) - qv) > 1e-6) {
+        el('line', { x1: X(st.th), x2: X(st.th), y1: Y(qv), y2: Y(ell(st.th)), stroke: 'var(--gap)', 'stroke-width': 5, 'stroke-linecap': 'round' }, svg);
+        txt(svg, X(st.th) + 10, (Y(qv) + Y(ell(st.th))) / 2 + 4 + 14, 'KL gap', 'lbl', { fill: 'var(--gap)' });
+      }
+      el('circle', { cx: X(st.th), cy: Y(qv), r: 4.5, fill: 'var(--bnd)' }, svg);
+    }
+    el('circle', { cx: X(st.th), cy: Y(ell(st.th)), r: 6, fill: 'var(--ink)', stroke: 'var(--surface)', 'stroke-width': 2 }, svg);
+    // data strip
+    const ys = H - m.b + 42, r = resp(st.anchor !== null ? st.anchor : st.th);
+    const c1 = hex(cssv('--c1')), c2 = hex(cssv('--c2'));
+    txt(svg, m.l - 6, ys + 4, 'data', 'ax', { 'text-anchor': 'end' });
+    el('line', { x1: m.l, x2: W - m.r, y1: ys, y2: ys, class: 'grid' }, svg);
+    Yd.forEach((y, n) => el('circle', { cx: X(y), cy: ys, r: 6.5, fill: st.anchor !== null ? mix(c1, c2, r[n]) : cssv('--muted'), stroke: 'var(--surface)', 'stroke-width': 1.5 }, svg));
+    txt(svg, W - m.r, ys + 22, st.anchor !== null ? 'colored by responsibility r₁ from the last E step' : 'no E step yet: colors unknown', 'ax', { 'text-anchor': 'end' });
+    txt(svg, X(st.th), H - m.b - 6, 'θ', 'lbl', { 'text-anchor': 'middle', fill: 'var(--ink)' });
+    // readouts
+    const l = ell(st.th);
+    $('#loop-it').textContent = st.it; $('#loop-th').textContent = f2(st.th);
+    $('#loop-l').textContent = f2(l); $('#loop-q').textContent = qv === null ? '—' : f2(qv);
+    $('#loop-gap').textContent = qv === null ? '—' : f3(Math.max(0, l - qv));
+    const tight = st.anchor !== null && Math.abs(st.anchor - st.th) < 1e-12;
+    $('#loop-phase').textContent = st.anchor === null ? 'Next: E step. Compute responsibilities to build a bound that touches ℓ at θ.'
+      : tight ? 'Bound is tight (gap = 0). Next: M step. Jump to the peak of the blue curve (□).'
+      : 'M step done: ℓ rose by at least as much as the bound did. The gap that opened is a KL divergence. Next: E step.';
+    $('#loop-e').classList.toggle('next', !tight); $('#loop-m').classList.toggle('next', tight);
+    $('#loop-m').disabled = st.anchor === null;
+    $('#loop-e').disabled = tight;
+  }
+  const eStep = () => { st.anchor = st.th; st.hist.push(st.th); };
+  const mStep = () => { if (st.anchor === null) return; st.th = argQ(st.anchor); st.it++; };
+  function stop() { clearInterval(st.timer); st.timer = null; $('#loop-run').textContent = 'Run to convergence'; }
+  $('#loop-e').onclick = () => { stop(); eStep(); render(); };
+  $('#loop-m').onclick = () => { stop(); mStep(); render(); };
+  $('#loop-em').onclick = () => { stop(); if (st.anchor === null || st.anchor !== st.th) eStep(); mStep(); render(); };
+  $('#loop-run').onclick = () => {
+    if (st.timer) return stop();
+    $('#loop-run').textContent = 'Pause';
+    st.timer = setInterval(() => { const old = st.th; if (st.anchor === null || st.anchor !== st.th) eStep(); mStep(); render(); if (Math.abs(st.th - old) < 1e-4) { eStep(); render(); stop(); } }, reduceMotion ? 30 : 380);
+  };
+  $('#loop-reset').onclick = () => { stop(); Object.assign(st, { th: 4.2, anchor: null, hist: [], it: 0 }); render(); };
+  const ms = $('#loop-mu2s');
+  ms.oninput = () => { stop(); st.mu2 = +ms.value; $('#loop-mu2o').textContent = st.mu2.toFixed(1); $('#loop-mu2').textContent = st.mu2.toFixed(1); Object.assign(st, { anchor: null, hist: [], it: 0 }); scale(); render(); };
+  $('#loop-mu2o').textContent = '0.5';
+  svg.addEventListener('pointerdown', e => { const p = svgPt(svg, e); if (p.x >= m.l && p.x <= W - m.r && p.y <= H - m.b) { stop(); Object.assign(st, { th: Xi(p.x), anchor: null, hist: [], it: 0 }); render(); } });
+  scale(); renderers.push(render); render();
+})();
+
+/* color helpers (hoisted function declarations) */
+function hex(c) { c = c.replace('#', ''); if (c.length === 3) c = c.split('').map(x => x + x).join(''); return [0, 2, 4].map(i => parseInt(c.substr(i, 2), 16)); }
+function mix(a, b, t) { return 'rgb(' + a.map((v, i) => Math.round(v * t + b[i] * (1 - t))).join(',') + ')'; }
+
+/* =====================================================================
+   8.7.2.1  Jensen
+   ===================================================================== */
+(function () {
+  const svg = $('#jen-plot'), W = 420, H = 300, m = { l: 40, r: 12, t: 14, b: 30 };
+  const X = lin(0, 6.4, m.l, W - m.r), Y = lin(-2, 2.1, H - m.b, m.t);
+  const A = $('#jen-a'), B = $('#jen-b'), Qs = $('#jen-q');
+  function render() {
+    const a = +A.value, b = +B.value, q = +Qs.value;
+    $('#jen-a-o').textContent = a.toFixed(2); $('#jen-b-o').textContent = b.toFixed(2); $('#jen-q-o').textContent = q.toFixed(2);
+    svg.innerHTML = '';
+    for (let v = -2; v <= 2; v++) { el('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: 'grid' }, svg); txt(svg, m.l - 6, Y(v) + 4, v, 'ax', { 'text-anchor': 'end' }); }
+    for (let v = 0; v <= 6; v++) txt(svg, X(v), H - m.b + 16, v, 'ax', { 'text-anchor': 'middle' });
+    const pts = []; for (let x = 0.14; x <= 6.4; x += 0.03) pts.push([X(x), Y(Math.log(x))]);
+    el('path', { d: pathOf(pts), fill: 'none', stroke: 'var(--obj)', 'stroke-width': 2.5 }, svg);
+    txt(svg, X(6.1), Y(Math.log(6.1)) - 10, 'log x', 'lbl', { fill: 'var(--obj)', 'text-anchor': 'end' });
+    el('line', { x1: X(a), y1: Y(Math.log(a)), x2: X(b), y2: Y(Math.log(b)), stroke: 'var(--bnd)', 'stroke-width': 2 }, svg);
+    const xm = q * a + (1 - q) * b, la = Math.log(xm), al = q * Math.log(a) + (1 - q) * Math.log(b);
+    el('line', { x1: X(xm), x2: X(xm), y1: Y(-2), y2: Y(la), stroke: 'var(--muted)', 'stroke-dasharray': '3 4' }, svg);
+    if (la - al > 1e-4) el('line', { x1: X(xm), x2: X(xm), y1: Y(al), y2: Y(la), stroke: 'var(--gap)', 'stroke-width': 5, 'stroke-linecap': 'round' }, svg);
+    [[a, 'a'], [b, 'b']].forEach(([v, s]) => { el('circle', { cx: X(v), cy: Y(Math.log(v)), r: 5, fill: 'var(--surface)', stroke: 'var(--ink)', 'stroke-width': 2 }, svg); txt(svg, X(v), Y(Math.log(v)) + (s === 'a' ? 18 : -10), s, 'lbl', { 'text-anchor': 'middle', fill: 'var(--ink)' }); });
+    el('circle', { cx: X(xm), cy: Y(la), r: 6, fill: 'var(--obj)', stroke: 'var(--surface)', 'stroke-width': 2 }, svg);
+    el('circle', { cx: X(xm), cy: Y(al), r: 6, fill: 'var(--bnd)', stroke: 'var(--surface)', 'stroke-width': 2 }, svg);
+    $('#jen-la').textContent = f3(la); $('#jen-al').textContent = f3(al); $('#jen-gap').textContent = f3(la - al);
+  }
+  [A, B, Qs].forEach(i => i.oninput = render);
+  $('#jen-eq').onclick = () => { B.value = A.value; render(); };
+  renderers.push(render); render();
+})();
+
+/* =====================================================================
+   8.7.2.2  E step for one point
+   ===================================================================== */
+(function () {
+  const mus = [-1.5, 1.5];
+  const sm = $('#es-mix'), se = $('#es-elbo'), W = 380, H = 240, m = { l: 40, r: 12, t: 14, b: 30 };
+  const Yi = $('#es-y'), Pi = $('#es-pi'), Qi = $('#es-q');
+  function calc() {
+    const y = +Yi.value, p1 = +Pi.value, q = +Qi.value;
+    const lj = [Math.log(p1) + lnorm(y, mus[0], 1), Math.log(1 - p1) + lnorm(y, mus[1], 1)];
+    const lp = lse2(lj[0], lj[1]), post = Math.exp(lj[0] - lp);
+    const elbo = qq => qq * (lj[0] - Math.log(qq)) + (1 - qq) * (lj[1] - Math.log(1 - qq));
+    return { y, p1, q, lj, lp, post, elbo };
+  }
+  function render() {
+    const c = calc();
+    $('#es-y-o').textContent = c.y.toFixed(2); $('#es-pi-o').textContent = c.p1.toFixed(2); $('#es-q-o').textContent = c.q.toFixed(3);
+    // mixture plot
+    sm.innerHTML = '';
+    const X = lin(-4.5, 4.5, m.l, W - m.r), Y = lin(0, 0.42, H - m.b, m.t);
+    el('line', { x1: m.l, x2: W - m.r, y1: Y(0), y2: Y(0), class: 'base' }, sm);
+    for (let v = -4; v <= 4; v += 2) txt(sm, X(v), H - m.b + 16, v, 'ax', { 'text-anchor': 'middle' });
+    const w = [c.p1, 1 - c.p1], cols = ['var(--c1)', 'var(--c2)'];
+    [0, 1].forEach(k => { const pts = []; for (let x = -4.5; x <= 4.5; x += 0.05) pts.push([X(x), Y(w[k] * npdf(x, mus[k], 1))]); el('path', { d: pathOf(pts), fill: 'none', stroke: cols[k], 'stroke-width': 2.2 }, sm); });
+    el('line', { x1: X(c.y), x2: X(c.y), y1: Y(0), y2: m.t, stroke: 'var(--ink)', 'stroke-dasharray': '3 3' }, sm);
+    [0, 1].forEach(k => el('circle', { cx: X(c.y), cy: Y(Math.exp(c.lj[k])), r: 5.5, fill: cols[k], stroke: 'var(--surface)', 'stroke-width': 1.5 }, sm));
+    txt(sm, X(c.y), m.t + 2, 'y', 'lbl', { 'text-anchor': 'middle', fill: 'var(--ink)' });
+    // elbo plot
+    se.innerHTML = '';
+    const qs = []; for (let q = 0.002; q < 0.999; q += 0.004) qs.push(q);
+    const ev = qs.map(c.elbo), lo = Math.min(...ev, c.lp - 0.2), hiv = c.lp + 0.25 * (c.lp - lo + 0.1);
+    const QX = lin(0, 1, m.l, W - m.r), QY = lin(lo, hiv, H - m.b, m.t);
+    for (let v = 0; v <= 1; v += 0.25) txt(se, QX(v), H - m.b + 16, v, 'ax', { 'text-anchor': 'middle' });
+    txt(se, W - m.r, H - 2, 'q(z=1)', 'axl', { 'text-anchor': 'end' });
+    const tk = (hiv - lo) > 3 ? 1 : 0.5;
+    for (let v = Math.ceil(lo / tk) * tk; v <= hiv; v += tk) { el('line', { x1: m.l, x2: W - m.r, y1: QY(v), y2: QY(v), class: 'grid' }, se); txt(se, m.l - 6, QY(v) + 4, v.toFixed(1), 'ax', { 'text-anchor': 'end' }); }
+    el('line', { x1: m.l, x2: W - m.r, y1: QY(c.lp), y2: QY(c.lp), stroke: 'var(--obj)', 'stroke-width': 2, 'stroke-dasharray': '7 5' }, se);
+    txt(se, W - m.r, QY(c.lp) - 6, 'log p(y|θ)', 'lbl', { 'text-anchor': 'end', fill: 'var(--obj)' });
+    el('path', { d: pathOf(qs.map((q, i) => [QX(q), QY(ev[i])])), fill: 'none', stroke: 'var(--bnd)', 'stroke-width': 2.5 }, se);
+    el('line', { x1: QX(c.post), x2: QX(c.post), y1: QY(lo), y2: QY(c.lp), stroke: 'var(--mi)', 'stroke-dasharray': '2 3' }, se);
+    txt(se, QX(c.post), H - m.b - 6, 'posterior', 'ax', { 'text-anchor': c.post > 0.8 ? 'end' : c.post < 0.2 ? 'start' : 'middle', fill: 'var(--mi)' });
+    const e = c.elbo(c.q);
+    if (c.lp - e > 1e-4) el('line', { x1: QX(c.q), x2: QX(c.q), y1: QY(e), y2: QY(c.lp), stroke: 'var(--gap)', 'stroke-width': 5, 'stroke-linecap': 'round' }, se);
+    el('circle', { cx: QX(c.q), cy: QY(e), r: 6, fill: 'var(--bnd)', stroke: 'var(--surface)', 'stroke-width': 2 }, se);
+    // readouts
+    const kl = c.lp - e;
+    $('#es-post').textContent = f3(c.post); $('#es-lp').textContent = f3(c.lp); $('#es-elb').textContent = f3(e); $('#es-kl').textContent = f3(Math.max(0, kl));
+    const Elog = c.q * c.lj[0] + (1 - c.q) * c.lj[1], Hq = -(c.q * Math.log(c.q) + (1 - c.q) * Math.log(1 - c.q));
+    $('#es-chain').innerHTML = `<span class="b">ELBO</span> = E<sub>q</sub>[log p(y,z|θ)] + H(q) = ${f3(Elog)} + ${f3(Hq)} = <span class="b">${f3(e)}</span><br><span class="o">log p(y|θ)</span> = <span class="b">ELBO</span> + <span class="a">KL</span> = ${f3(e)} + ${f3(Math.max(0, kl))} = <span class="o">${f3(c.lp)}</span>` + (kl < 5e-4 ? ' &nbsp;<span class="ok">✓ tight: q is the posterior</span>' : '');
+  }
+  [Yi, Pi, Qi].forEach(i => i.oninput = render);
+  $('#es-do').onclick = () => { Qi.value = Math.min(0.999, Math.max(0.001, calc().post)); render(); };
+  renderers.push(render); render();
+})();
+
+/* =====================================================================
+   8.7.2.3  M step in 1D
+   ===================================================================== */
+(function () {
+  const Y0 = [-3.0, -2.4, -2.0, -1.6, -1.0, -0.3, 0.3, 0.9, 1.6, 2.0, 2.5, 3.1];
+  const TH0 = { mu: [-0.6, 0.9], s: [1.2, 1.2], pi: [0.5, 0.5] };
+  const st = { y: Y0.slice(), th: JSON.parse(JSON.stringify(TH0)), k: 0, mu: 0, nw: null, drag: -1 };
+  const sd = $('#ms-data'), so = $('#ms-obj'), W = 640;
+  const X = lin(-4.5, 4.5, 44, W - 12), Xi = lin(44, W - 12, -4.5, 4.5);
+  const MU = $('#ms-mu');
+  function resp() { return st.y.map(y => { const a = Math.log(st.th.pi[0]) + lnorm(y, st.th.mu[0], st.th.s[0]), b = Math.log(st.th.pi[1]) + lnorm(y, st.th.mu[1], st.th.s[1]), z = lse2(a, b); return [Math.exp(a - z), Math.exp(b - z)]; }); }
+  function stats(R) { return [0, 1].map(k => { let s0 = 0, s1 = 0, s2 = 0; st.y.forEach((y, n) => { s0 += R[n][k]; s1 += R[n][k] * y; s2 += R[n][k] * y * y; }); const mu = s1 / s0, v = Math.max(s2 / s0 - mu * mu, 0.05); return { s0, s1, s2, mu, v, pi: s0 / st.y.length }; }); }
+  function render() {
+    const R = resp(), S = stats(R), k = st.k, cols = ['var(--c1)', 'var(--c2)'];
+    MU.value = st.mu; $('#ms-mu-o').textContent = st.mu.toFixed(2);
+    // data plot
+    sd.innerHTML = '';
+    const H = 230, base = 150, DY = lin(0, 0.42, base, 14);
+    el('line', { x1: 44, x2: W - 12, y1: base, y2: base, class: 'base' }, sd);
+    for (let v = -4; v <= 4; v++) txt(sd, X(v), base + 66, v, 'ax', { 'text-anchor': 'middle' });
+    [0, 1].forEach(j => {
+      const p = []; for (let x = -4.5; x <= 4.5; x += 0.05) p.push([X(x), DY(st.th.pi[j] * npdf(x, st.th.mu[j], st.th.s[j]))]);
+      el('path', { d: pathOf(p), fill: 'none', stroke: cols[j], 'stroke-width': 1.4, opacity: .75 }, sd);
+      if (st.nw) { const q = []; for (let x = -4.5; x <= 4.5; x += 0.05) q.push([X(x), DY(st.nw.pi[j] * npdf(x, st.nw.mu[j], st.nw.s[j]))]); el('path', { d: pathOf(q), fill: 'none', stroke: cols[j], 'stroke-width': 2.6, 'stroke-dasharray': '7 4' }, sd); }
+    });
+    txt(sd, 50, 26, st.nw ? 'thin = θᵗ, dashed = after M step' : 'thin curves = current θᵗ (weighted components)', 'ax');
+    // responsibility bars
+    const bh = 44;
+    st.y.forEach((y, n) => {
+      const x = X(y), r1 = R[n][0];
+      el('rect', { x: x - 6, y: base + 6, width: 12, height: bh * r1, fill: 'var(--c1)', opacity: k === 0 ? 1 : .45 }, sd);
+      el('rect', { x: x - 6, y: base + 6 + bh * r1, width: 12, height: bh * (1 - r1), fill: 'var(--c2)', opacity: k === 1 ? 1 : .45 }, sd);
+      const c = el('circle', { cx: x, cy: base, r: 7, fill: 'var(--ink)', stroke: 'var(--surface)', 'stroke-width': 2, style: 'cursor:ew-resize', 'data-n': n }, sd);
+      c.setAttribute('tabindex', '0'); c.setAttribute('aria-label', `point ${n + 1} at ${y.toFixed(2)}, responsibility for cluster 1 ${r1.toFixed(2)}`);
+    });
+    el('line', { x1: X(st.mu), x2: X(st.mu), y1: 14, y2: base, stroke: cols[k], 'stroke-width': 2 }, sd);
+    el('path', { d: `M${X(st.mu)},${base}l-9,-14h18z`, fill: cols[k] }, sd);
+    txt(sd, X(st.mu), 12 + 0, 'candidate μ', 'lbl', { 'text-anchor': X(st.mu) > W - 80 ? 'end' : 'middle', fill: cols[k] });
+    // objective plot
+    so.innerHTML = '';
+    const sk = Math.max(st.th.s[k], 0.2);
+    const obj = mu => st.y.reduce((s, y, n) => s + R[n][k] * lnorm(y, mu, sk), 0);
+    const mus = []; for (let t = -4.5; t <= 4.5; t += 0.05) mus.push(t);
+    const vs = mus.map(obj), vmax = Math.max(...vs), vmin = Math.max(Math.min(...vs), vmax - 30);
+    const OY = lin(vmin, vmax, 130, 40);
+    el('line', { x1: 44, x2: W - 12, y1: 130, y2: 130, class: 'base' }, so);
+    for (let v = -4; v <= 4; v++) txt(so, X(v), 146, v, 'ax', { 'text-anchor': 'middle' });
+    txt(so, 50, 14, `Σₙ r_n${k + 1} · log N(yₙ | μ, σ${k + 1}²)  (cluster ${k + 1}'s part of ℓᵗ)`, 'ax');
+    el('path', { d: pathOf(mus.map((t, i) => [X(t), OY(vs[i])]).filter((p, i) => vs[i] >= vmin)), fill: 'none', stroke: cols[k], 'stroke-width': 2.5 }, so);
+    el('line', { x1: X(S[k].mu), x2: X(S[k].mu), y1: 130, y2: OY(obj(S[k].mu)), stroke: 'var(--green)', 'stroke-dasharray': '3 3' }, so);
+    txt(so, X(S[k].mu), OY(obj(S[k].mu)) - 8, 'weighted mean = ' + S[k].mu.toFixed(2), 'lbl', { 'text-anchor': 'middle', fill: 'var(--green)' });
+    el('circle', { cx: X(st.mu), cy: OY(Math.max(obj(st.mu), vmin)), r: 6, fill: cols[k], stroke: 'var(--surface)', 'stroke-width': 2 }, so);
+    // table
+    const row = (lab, f) => `<tr><td>${lab}</td><td class="c1">${f(0)}</td><td class="c2">${f(1)}</td></tr>`;
+    $('#ms-tab').innerHTML = `<thead><tr><th>expected sufficient statistic → parameter</th><th>cluster 1</th><th>cluster 2</th></tr></thead><tbody>` +
+      row('r_k = Σ r_nk (soft count)', j => S[j].s0.toFixed(2)) +
+      row('Σ r_nk · y_n', j => S[j].s1.toFixed(2)) +
+      row('Σ r_nk · y_n²', j => S[j].s2.toFixed(2)) +
+      row('μ_k = Σ r y / r_k', j => S[j].mu.toFixed(3)) +
+      row('σ_k² = Σ r y² / r_k − μ_k²', j => S[j].v.toFixed(3)) +
+      row('π_k = r_k / N', j => S[j].pi.toFixed(3)) +
+      row('current θᵗ: μ, σ, π', j => `${st.th.mu[j].toFixed(2)}, ${st.th.s[j].toFixed(2)}, ${st.th.pi[j].toFixed(2)}`) + '</tbody>';
+    $('#ms-accept').disabled = !st.nw;
+    st._S = S;
+  }
+  $('#ms-k').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b) return; st.k = +b.dataset.k; $$('#ms-k button').forEach(x => x.classList.toggle('on', x === b)); st.mu = st.th.mu[st.k]; render(); });
+  MU.oninput = () => { st.mu = +MU.value; render(); };
+  $('#ms-best').onclick = () => { st.mu = st._S[st.k].mu; render(); };
+  $('#ms-m').onclick = () => { const S = st._S; st.nw = { mu: S.map(s => s.mu), s: S.map(s => Math.sqrt(s.v)), pi: S.map(s => s.pi) }; st.mu = S[st.k].mu; render(); };
+  $('#ms-accept').onclick = () => { if (!st.nw) return; st.th = st.nw; st.nw = null; st.mu = st.th.mu[st.k]; render(); };
+  $('#ms-reset').onclick = () => { st.y = Y0.slice(); st.th = JSON.parse(JSON.stringify(TH0)); st.nw = null; st.mu = st.th.mu[st.k]; render(); };
+  sd.addEventListener('pointerdown', e => { const c = e.target.closest('[data-n]'); if (!c) return; st.drag = +c.dataset.n; sd.setPointerCapture(e.pointerId); });
+  sd.addEventListener('pointermove', e => { if (st.drag < 0) return; const p = svgPt(sd, e); st.y[st.drag] = Math.max(-4.4, Math.min(4.4, Xi(p.x))); st.nw = null; render(); });
+  const end = () => { st.drag = -1; };
+  sd.addEventListener('pointerup', end); sd.addEventListener('pointercancel', end);
+  sd.addEventListener('keydown', e => { const c = e.target.closest('[data-n]'); if (!c) return; const n = +c.dataset.n; const d = e.key === 'ArrowLeft' ? -0.1 : e.key === 'ArrowRight' ? 0.1 : 0; if (!d) return; e.preventDefault(); st.y[n] = Math.max(-4.4, Math.min(4.4, st.y[n] + d)); st.nw = null; render(); const nc = sd.querySelector(`[data-n="${n}"]`); if (nc) nc.focus(); });
+  st.mu = st.th.mu[0];
+  renderers.push(render); render();
+})();
+
+/* =====================================================================
+   8.7.3  GMM on Old Faithful
+   ===================================================================== */
+(function () {
+  const ERU=[3.6,1.8,3.333,2.283,4.533,2.883,4.7,3.6,1.95,4.35,1.833,3.917,4.2,1.75,4.7,2.167,1.75,4.8,1.6,4.25,1.8,1.75,3.45,3.067,4.533,3.6,1.967,4.083,3.85,4.433,4.3,4.467,3.367,4.033,3.833,2.017,1.867,4.833,1.833,4.783,4.35,1.883,4.567,1.75,4.533,3.317,3.833,2.1,4.633,2,4.8,4.716,1.833,4.833,1.733,4.883,3.717,1.667,4.567,4.317,2.233,4.5,1.75,4.8,1.817,4.4,4.167,4.7,2.067,4.7,4.033,1.967,4.5,4,1.983,5.067,2.017,4.567,3.883,3.6,4.133,4.333,4.1,2.633,4.067,4.933,3.95,4.517,2.167,4,2.2,4.333,1.867,4.817,1.833,4.3,4.667,3.75,1.867,4.9,2.483,4.367,2.1,4.5,4.05,1.867,4.7,1.783,4.85,3.683,4.733,2.3,4.9,4.417,1.7,4.633,2.317,4.6,1.817,4.417,2.617,4.067,4.25,1.967,4.6,3.767,1.917,4.5,2.267,4.65,1.867,4.167,2.8,4.333,1.833,4.383,1.883,4.933,2.033,3.733,4.233,2.233,4.533,4.817,4.333,1.983,4.633,2.017,5.1,1.8,5.033,4,2.4,4.6,3.567,4,4.5,4.083,1.8,3.967,2.2,4.15,2,3.833,3.5,4.583,2.367,5,1.933,4.617,1.917,2.083,4.583,3.333,4.167,4.333,4.5,2.417,4,4.167,1.883,4.583,4.25,3.767,2.033,4.433,4.083,1.833,4.417,2.183,4.8,1.833,4.8,4.1,3.966,4.233,3.5,4.366,2.25,4.667,2.1,4.35,4.133,1.867,4.6,1.783,4.367,3.85,1.933,4.5,2.383,4.7,1.867,3.833,3.417,4.233,2.4,4.8,2,4.15,1.867,4.267,1.75,4.483,4,4.117,4.083,4.267,3.917,4.55,4.083,2.417,4.183,2.217,4.45,1.883,1.85,4.283,3.95,2.333,4.15,2.35,4.933,2.9,4.583,3.833,2.083,4.367,2.133,4.35,2.2,4.45,3.567,4.5,4.15,3.817,3.917,4.45,2,4.283,4.767,4.533,1.85,4.25,1.983,2.25,4.75,4.117,2.15,4.417,1.817,4.467];
+  const WAIT=[79,54,74,62,85,55,88,85,51,85,54,84,78,47,83,52,62,84,52,79,51,47,78,69,74,83,55,76,78,79,73,77,66,80,74,52,48,80,59,90,80,58,84,58,73,83,64,53,82,59,75,90,54,80,54,83,71,64,77,81,59,84,48,82,60,92,78,78,65,73,82,56,79,71,62,76,60,78,76,83,75,82,70,65,73,88,76,80,48,86,60,90,50,78,63,72,84,75,51,82,62,88,49,83,81,47,84,52,86,81,75,59,89,79,59,81,50,85,59,87,53,69,77,56,88,81,45,82,55,90,45,83,56,89,46,82,51,86,53,79,81,60,82,77,76,59,80,49,96,53,77,77,65,81,71,70,81,93,53,89,45,86,58,78,66,76,63,88,52,93,49,57,77,68,81,81,73,50,85,74,55,77,83,83,51,78,84,46,83,55,81,57,76,84,77,81,87,77,51,78,60,82,91,53,78,46,77,84,49,83,71,80,49,75,64,76,53,94,55,76,50,82,54,75,78,79,78,78,70,79,70,54,86,50,90,54,54,77,79,64,75,47,86,63,85,82,57,82,67,74,54,83,73,73,88,80,71,83,56,79,78,84,58,83,43,60,75,81,46,90,46,74];
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  const sdv = a => { const u = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - u) ** 2, 0) / a.length); };
+  const me = mean(ERU), se = sdv(ERU), mw = mean(WAIT), sw = sdv(WAIT);
+  const D = ERU.map((v, i) => [(v - me) / se, (WAIT[i] - mw) / sw]), N = D.length;
+  const svg = $('#gmm-plot'), tr = $('#gmm-trace');
+  const W = 460, H = 440, m = { l: 40, r: 10, t: 10, b: 34 };
+  const xr = [-2.2, 2.2], yr = [-2.6, 2.0];
+  const unit = Math.min((W - m.l - m.r) / (xr[1] - xr[0]), (H - m.t - m.b) / (yr[1] - yr[0]));
+  const X = v => m.l + (v - xr[0]) * unit, Y = v => H - m.b - (v - yr[0]) * unit;
+  const Xi = p => xr[0] + (p - m.l) / unit, Yi = p => yr[0] + (H - m.b - p) / unit;
+  function lnmvn(x, mu, S) { const [a, b, , d] = S, det = a * d - b * b, dx = x[0] - mu[0], dy = x[1] - mu[1]; return -Math.log(2 * Math.PI) - 0.5 * Math.log(det) - 0.5 * (d * dx * dx - 2 * b * dx * dy + a * dy * dy) / det; }
+  const init = (mu) => ({ mu: mu || [[-1, 1], [1, -1]], S: [[1, 0, 0, 1], [1, 0, 0, 1]], pi: [0.5, 0.5] });
+  const st = { th: init(), R: null, it: 0, trace: [], timer: null, hover: -1, drag: -1, bug: false };
+  function loglik(th) { let L = 0; D.forEach(x => { L += lse2(Math.log(th.pi[0]) + lnmvn(x, th.mu[0], th.S[0]), Math.log(th.pi[1]) + lnmvn(x, th.mu[1], th.S[1])); }); return L; }
+  function eStep() { const th = st.th; st.R = D.map(x => { const a = Math.log(th.pi[0]) + lnmvn(x, th.mu[0], th.S[0]), b = Math.log(th.pi[1]) + lnmvn(x, th.mu[1], th.S[1]), z = lse2(a, b); return Math.exp(a - z); }); }
+  function mStep() {
+    if (!st.R) return;
+    const th = { mu: [], S: [], pi: [] };
+    [0, 1].forEach(k => {
+      let rk = 0, mx = 0, my = 0;
+      D.forEach((x, n) => { const r = k ? 1 - st.R[n] : st.R[n]; rk += r; mx += r * x[0]; my += r * x[1]; });
+      mx /= rk; my /= rk;
+      let a = 0, b = 0, d = 0;
+      D.forEach((x, n) => { const r = k ? 1 - st.R[n] : st.R[n], dx = x[0] - mx, dy = x[1] - my; a += r * dx * dx; b += r * dx * dy; d += r * dy * dy; });
+      const den = st.bug ? 2 * rk : rk;
+      th.mu.push([mx, my]); th.S.push([a / den + 1e-6, b / den, b / den, d / den + 1e-6]); th.pi.push(rk / N);
+    });
+    st.th = th; st.R = null; st.it++; st.trace.push(loglik(th));
+  }
+  function ellipse(g, mu, S, k, col, w, dash) {
+    const [a, b, , d] = S, tmid = (a + d) / 2, disc = Math.sqrt(((a - d) / 2) ** 2 + b * b);
+    const l1 = tmid + disc, l2 = Math.max(tmid - disc, 1e-9), ang = 0.5 * Math.atan2(2 * b, a - d) * 180 / Math.PI;
+    el('ellipse', { cx: X(mu[0]), cy: Y(mu[1]), rx: k * Math.sqrt(l1) * unit, ry: k * Math.sqrt(l2) * unit, transform: `rotate(${-ang} ${X(mu[0])} ${Y(mu[1])})`, fill: 'none', stroke: col, 'stroke-width': w, 'stroke-dasharray': dash || '' }, g);
+  }
+  function render() {
+    svg.innerHTML = '';
+    el('clipPath', { id: 'gmclip' }, el('defs', {}, svg)).appendChild(el('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b }));
+    for (let v = -2; v <= 2; v++) { if (v >= xr[0]) { el('line', { x1: X(v), x2: X(v), y1: m.t, y2: H - m.b, class: 'grid' }, svg); txt(svg, X(v), H - m.b + 15, v, 'ax', { 'text-anchor': 'middle' }); } if (v >= yr[0] && v <= yr[1]) { el('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: 'grid' }, svg); txt(svg, m.l - 6, Y(v) + 4, v, 'ax', { 'text-anchor': 'end' }); } }
+    txt(svg, W - m.r, H - 4, 'eruption duration (standardized)', 'ax', { 'text-anchor': 'end' });
+    txt(svg, m.l + 4, m.t + 12, 'waiting time (standardized)', 'ax');
+    const c1 = hex(cssv('--c1')), c2 = hex(cssv('--c2')), mut = cssv('--muted');
+    const g = el('g', { 'clip-path': 'url(#gmclip)' }, svg);
+    D.forEach((x, n) => el('circle', { cx: X(x[0]), cy: Y(x[1]), r: n === st.hover ? 6 : 3.6, fill: st.R ? mix(c1, c2, st.R[n]) : mut, 'fill-opacity': st.R ? .9 : .55, stroke: n === st.hover ? 'var(--ink)' : 'none', 'stroke-width': 2 }, g));
+    const cols = ['var(--c1)', 'var(--c2)'];
+    [0, 1].forEach(k => { ellipse(g, st.th.mu[k], st.th.S[k], 1, cols[k], 2.4); ellipse(g, st.th.mu[k], st.th.S[k], 2, cols[k], 1.4, '5 4'); });
+    [0, 1].forEach(k => { const cx = X(st.th.mu[k][0]), cy = Y(st.th.mu[k][1]); el('circle', { cx, cy, r: 11, fill: 'var(--surface)', stroke: cols[k], 'stroke-width': 2.5, style: 'cursor:move', 'data-mu': k }, svg); el('path', { d: `M${cx - 6},${cy}h12M${cx},${cy - 6}v12`, stroke: cols[k], 'stroke-width': 2.5, 'pointer-events': 'none' }, svg); });
+    // readouts
+    $('#gmm-it').textContent = st.it;
+    $('#gmm-ll').textContent = loglik(st.th).toFixed(1);
+    $('#gmm-phase').textContent = st.R ? 'Responsibilities are fresh (colors match θ). Next: M step moves and reshapes the ellipses.' : 'Parameters just changed, so the colors are stale or missing. Next: E step recolors the dots.';
+    $('#gmm-e').classList.toggle('next', !st.R); $('#gmm-m').classList.toggle('next', !!st.R); $('#gmm-m').disabled = !st.R; $('#gmm-e').disabled = !!st.R;
+    const th = st.th, row = (lab, f) => `<tr><td>${lab}</td><td class="c1">${f(0)}</td><td class="c2">${f(1)}</td></tr>`;
+    $('#gmm-tab').innerHTML = '<thead><tr><th></th><th>clust. 1</th><th>clust. 2</th></tr></thead><tbody>' +
+      row('π_k', k => th.pi[k].toFixed(3)) + row('μ_k', k => `${f2(th.mu[k][0])}<br>${f2(th.mu[k][1])}`) +
+      row('Σ_k', k => `${f2(th.S[k][0])} ${f2(th.S[k][1])}<br>${f2(th.S[k][2])} ${f2(th.S[k][3])}`) + '</tbody>';
+    hoverInfo();
+    // trace
+    tr.innerHTML = '';
+    const vals = [loglikInit].concat(st.trace), n = Math.max(40, vals.length - 1);
+    const lo = Math.min(...vals), hiv = Math.max(...vals), TX = lin(0, n, 50, 628), TY = lin(lo, hiv + 1e-9, 104, 10);
+    el('line', { x1: 50, x2: 628, y1: 104, y2: 104, class: 'base' }, tr);
+    txt(tr, 44, TY(hiv) + 4, Math.round(hiv), 'ax', { 'text-anchor': 'end' }); txt(tr, 44, TY(lo) + 4, Math.round(lo), 'ax', { 'text-anchor': 'end' });
+    for (let i = 0; i <= n; i += 10) txt(tr, TX(i), 118, i, 'ax', { 'text-anchor': 'middle' });
+    let drops = 0;
+    for (let i = 1; i < vals.length; i++) { const down = vals[i] < vals[i - 1] - 1e-7; if (down) drops++; el('line', { x1: TX(i - 1), x2: TX(i), y1: TY(vals[i - 1]), y2: TY(vals[i]), stroke: down ? 'var(--obj)' : 'var(--green)', 'stroke-width': down ? 3.5 : 2.5 }, tr); }
+    if (drops) txt(tr, 628, 22, `✗ ${drops} drop${drops > 1 ? 's' : ''}: there's a bug!`, 'lbl', { 'text-anchor': 'end', fill: 'var(--obj)' });
+    else if (vals.length > 1) txt(tr, 628, 22, '✓ monotone', 'lbl', { 'text-anchor': 'end', fill: 'var(--green)' });
+  }
+  let loglikInit = loglik(st.th);
+  function hoverInfo() {
+    const box = $('#gmm-hover'), n = st.hover;
+    if (n < 0) { box.innerHTML = 'Hover or tap a dot to see its E step (Eq. 8.160).'; return; }
+    const x = D[n], th = st.th;
+    const a = th.pi[0] * Math.exp(lnmvn(x, th.mu[0], th.S[0])), b = th.pi[1] * Math.exp(lnmvn(x, th.mu[1], th.S[1]));
+    const r = a / (a + b);
+    box.innerHTML = `eruption ${ERU[n]} min, wait ${WAIT[n]} min → y = (${f2(x[0])}, ${f2(x[1])})<br>` +
+      `<span class="c1">π₁·N(y|μ₁,Σ₁) = ${a.toExponential(2)}</span> &nbsp; <span class="c2">π₂·N(y|μ₂,Σ₂) = ${b.toExponential(2)}</span><br>` +
+      `r<sub>n1</sub> = ${a.toExponential(2)} / (${a.toExponential(2)} + ${b.toExponential(2)}) = <span class="c1">${r.toFixed(3)}</span>, &nbsp; r<sub>n2</sub> = <span class="c2">${(1 - r).toFixed(3)}</span>` +
+      (st.R ? '' : '<br><i>(computed from the current θ, i.e. what the next E step will give)</i>');
+  }
+  function stop() { clearInterval(st.timer); st.timer = null; $('#gmm-run').textContent = 'Run'; }
+  function half() { if (st.R) mStep(); else eStep(); }
+  function reset(mu) { stop(); st.th = init(mu); st.R = null; st.it = 0; st.trace = []; loglikInit = loglik(st.th); render(); }
+  $('#gmm-e').onclick = () => { stop(); eStep(); render(); };
+  $('#gmm-m').onclick = () => { stop(); mStep(); render(); };
+  $('#gmm-run').onclick = () => {
+    if (st.timer) return stop();
+    $('#gmm-run').textContent = 'Pause';
+    st.timer = setInterval(() => { half(); if (!st.R) eStep(); render(); if (st.it >= 120 || (st.trace.length > 2 && Math.abs(st.trace.at(-1) - st.trace.at(-2)) < 1e-7)) stop(); }, reduceMotion ? 20 : 110);
+  };
+  $('#gmm-reset').onclick = () => reset();
+  $$('[data-jump]').forEach(b => b.onclick = () => { reset(); const T = +b.dataset.jump; for (let i = 0; i < T; i++) { eStep(); mStep(); } eStep(); render(); });
+  $('#gmm-bug').onchange = e => { st.bug = e.target.checked; render(); };
+  svg.addEventListener('pointerdown', e => { const c = e.target.closest('[data-mu]'); if (c) { st.drag = +c.dataset.mu; svg.setPointerCapture(e.pointerId); stop(); } else pick(e); });
+  svg.addEventListener('pointermove', e => {
+    if (st.drag >= 0) { const p = svgPt(svg, e); const mu = st.th.mu.map(v => v.slice()); mu[st.drag] = [Math.max(xr[0], Math.min(xr[1], Xi(p.x))), Math.max(yr[0], Math.min(yr[1], Yi(p.y)))]; st.th = init(mu); st.R = null; st.it = 0; st.trace = []; loglikInit = loglik(st.th); render(); return; }
+    if (e.pointerType === 'mouse') pick(e);
+  });
+  const endDrag = () => { st.drag = -1; };
+  svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', endDrag);
+  svg.addEventListener('pointerleave', () => { if (st.drag < 0 && st.hover >= 0) { st.hover = -1; render(); } });
+  function pick(e) { const p = svgPt(svg, e); let best = -1, bd = 14 * 14; D.forEach((x, n) => { const dx = X(x[0]) - p.x, dy = Y(x[1]) - p.y, dd = dx * dx + dy * dy; if (dd < bd) { bd = dd; best = n; } }); if (best !== st.hover) { st.hover = best; render(); } }
+  renderers.push(render); render();
+})();
+
+/* ---------- re-render on theme change ---------- */
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => renderers.forEach(r => r()));
+
+/* ---------- Quizzes ---------- */
+const QUIZ = {
+  mm: [
+    { l: 'Kid', q: 'In the foggy-hill story, why do you never end up lower than where you started?', o: ['The tent is always taller than the hill', 'The tent stays under the ground and touches it where you stand, so its top is no lower than your spot', 'You always walk uphill', 'The fog lifts'], a: 1, w: 'The tent (bound) touches at your spot, its top is at least that high, and the ground is above the tent. That gives three links in a chain.' },
+    { l: 'HS', q: 'Q is a valid minorizer of ℓ at θᵗ when…', o: ['Q ≥ ℓ everywhere', 'Q ≤ ℓ everywhere and Q(θᵗ, θᵗ) = ℓ(θᵗ)', 'Q has the same maximum as ℓ', 'Q is a parabola'], a: 1, w: 'A lower bound that touches at the current guess. Any shape works, as long as it\'s easy to maximize.' },
+    { l: 'Undergrad', q: 'In ℓ(θᵗ⁺¹) ≥ Q(θᵗ⁺¹,θᵗ) ≥ Q(θᵗ,θᵗ) = ℓ(θᵗ), which property gives the middle "≥"?', o: ['Lower-bound property', 'Tightness', 'θᵗ⁺¹ maximizes Q(·,θᵗ)', 'Concavity of log'], a: 2, w: 'The argmax beats every point on Q, including θᵗ. The first link is the lower bound and the "=" is tightness.' },
+    { l: 'Undergrad', q: 'Why can Newton\'s method decrease the objective when MM can\'t?', o: ['Newton uses the gradient, MM doesn\'t', 'Newton\'s quadratic is an approximation (curvature ℓ″), not a bound, so it can overshoot or even head to a minimum', 'Newton is always slower', 'MM uses second derivatives'], a: 1, w: 'Figure 8.24. Try the presets: where ℓ″ > 0, Newton\'s "parabola" opens upward and its stationary point is a minimum.' },
+    { l: 'Grad', q: 'Your EM training log shows the log-likelihood dropped from −1203.4 to −1203.9 at iteration 17. The most likely explanation?', o: ['Normal stochastic fluctuation', 'Converged to a saddle', 'A bug in the derivation or code (or numerical underflow)', 'The learning rate is too high'], a: 2, w: 'Exact EM is monotone, so a drop larger than round-off means the E or M step isn\'t what you think it is. This is the "surprisingly powerful debugging tool" from the text.' }
+  ],
+  em: [
+    { l: 'Kid', q: 'Why do we "take turns" between guessing labels and updating the bakeries?', o: ['Because it\'s faster to do one thing at a time', 'Each one is easy if you know the other, but we know neither', 'Because computers can\'t do two things at once', 'To make it random'], a: 1, w: 'Chicken and egg: labels are easy given the model, and the model is easy given the labels.' },
+    { l: 'HS', q: 'What does the E step produce for each data point?', o: ['A single hard label', 'Probabilities for each hidden label (soft labels)', 'New cluster centers', 'The final answer'], a: 1, w: 'For example "82% cluster 1, 18% cluster 2". These are the responsibilities.' },
+    { l: 'Undergrad', q: 'In the Figure 8.23 demo, right after an M step the red curve sits above the blue bound at the new θ. What is that gap?', o: ['Numerical error', 'Σₙ KL(p(zₙ|yₙ,θᵗ) ‖ p(zₙ|yₙ,θ)), which the next E step closes', 'The entropy H(q)', 'The prior'], a: 1, w: 'The q\'s are still the old posteriors, so they no longer match the posterior at the new θ. That mismatch is exactly the gap.' },
+    { l: 'Undergrad', q: 'EM is guaranteed to converge to…', o: ['The global maximum of the likelihood', 'A local maximum (stationary point) of the likelihood', 'The true parameters', 'Zero'], a: 1, w: 'Monotone ascent stops at a stationary point. Where you start decides which one, so try clicking different starts in the demo.' },
+    { l: 'Grad', q: 'Neal & Hinton\'s view of EM is coordinate ascent on Ł(θ, q). What does it justify?', o: ['Only exact E steps are valid', 'Partial/incremental E steps and partial M steps (GEM/ECM) still increase Ł monotonically', 'EM is equivalent to Newton\'s method', 'q must be Gaussian'], a: 1, w: 'Any step that doesn\'t decrease Ł in one coordinate keeps the guarantee for Ł, which enables online and incremental EM.' }
+  ],
+  lb: [
+    { l: 'Kid', q: 'The log "squishes" big numbers more. Which is bigger: squish-the-average or average-the-squishes?', o: ['Squish-the-average', 'Average-the-squishes', 'Always equal', 'It depends on the colors'], a: 0, w: 'log(average) ≥ average(log). That\'s Jensen\'s inequality, and the gap is the amber bar in the demo.' },
+    { l: 'HS', q: 'In the Jensen demo, when is the gap exactly zero?', o: ['When q = 0.5', 'When a = b (or q is 0 or 1)', 'When a and b are large', 'Never'], a: 1, w: 'If all the averaged values are equal, averaging does nothing, so log and average commute.' },
+    { l: 'Undergrad', q: 'Why is ℓ(θ) = Σₙ log Σ_z p(yₙ, z | θ) hard to maximize directly?', o: ['It\'s not differentiable', 'The log of a sum doesn\'t split into separate per-cluster terms', 'It has no maximum', 'It\'s always convex'], a: 1, w: 'With the log outside the sum, all cluster parameters are tangled together. After Jensen, the log moves inside and the terms decouple.' },
+    { l: 'Undergrad', q: 'The ELBO equals…', o: ['E_q[log p(y,z|θ)] − H(q)', 'E_q[log p(y,z|θ)] + H(q)', 'log p(y|θ) + KL', 'E_q[log q(z)]'], a: 1, w: 'Σ q log(p/q) = Σ q log p − Σ q log q = E_q[log p] + H(q).' },
+    { l: 'Grad', q: 'For which q is the bound in Eq. 8.148 valid?', o: ['Only the posterior', 'Only Gaussian q', 'Any distribution q with support covering the z\'s where p(y,z|θ) > 0', 'Only q = uniform'], a: 2, w: 'Jensen holds for any weights. The choice of q only controls tightness. That\'s why variational methods can use restricted families.' }
+  ],
+  estep: [
+    { l: 'Kid', q: 'A cookie is exactly halfway between "very chocolatey" (Rosie\'s) and "not chocolatey" (Blue Door), and both bakeries sell equally many. Your best guess?', o: ['100% Rosie\'s', '50/50', '100% Blue Door', 'Throw it away'], a: 1, w: 'Equal evidence and equal shares give an even split. Try y = 0 with π₁ = 0.5 in the demo.' },
+    { l: 'HS', q: 'Prior π₁ = 0.5. The point is 3× more likely under cluster 1 than cluster 2. What is p(z=1 | y)?', o: ['0.25', '0.5', '0.75', '0.9'], a: 2, w: 'Bayes: 0.5·3 / (0.5·3 + 0.5·1) = 3/4.' },
+    { l: 'Undergrad', q: 'Ł(θ, q) = −KL(q ‖ p(z|y,θ)) + log p(y|θ). Maximizing over q gives…', o: ['q = uniform', 'q = prior p(z)', 'q = posterior p(z|y,θ), making the bound tight', 'q = a point mass on the most likely z'], a: 2, w: 'KL ≥ 0 with equality iff q equals the posterior, and the log p(y|θ) term doesn\'t depend on q.' },
+    { l: 'Undergrad', q: 'Q(θ, θᵗ) is built from posteriors computed at…', o: ['the new θ', 'the old θᵗ, then evaluated as a function of the new θ', 'the true parameters', 'a random θ'], a: 1, w: 'Eq. 8.156: freeze q at p(z|y,θᵗ). That keeps Q simple in θ, and it\'s tight only at θ = θᵗ.' },
+    { l: 'Grad', q: 'You can only approximate the posterior with a mean-field q. What changes?', o: ['Nothing', 'The bound is no longer tight, so you get variational EM: Ł still increases, but ℓ may not', 'EM diverges', 'You must use Newton\'s method'], a: 1, w: 'The gap KL(q‖posterior) stays positive. Monotonicity is guaranteed for the ELBO, not for the marginal likelihood.' }
+  ],
+  mstep: [
+    { l: 'Kid', q: 'A cookie is "80% Rosie\'s." How much does it count in Rosie\'s pile?', o: ['A whole cookie', '0.8 of a cookie', 'Nothing', '8 cookies'], a: 1, w: 'Soft counts. It also counts as 0.2 of a cookie in Blue Door\'s pile.' },
+    { l: 'HS', q: 'Points at 0 and 4 have cluster-1 weights 0.75 and 0.25. The new μ₁ is…', o: ['2', '1', '3', '0.5'], a: 1, w: '(0.75·0 + 0.25·4) / (0.75 + 0.25) = 1 / 1 = 1. A weighted average, the balance point.' },
+    { l: 'Undergrad', q: 'Why can the entropy term H(qₙ) be dropped in the M step?', o: ['It\'s always zero', 'It doesn\'t depend on θ (the q\'s are frozen)', 'It\'s negative', 'It cancels with the KL'], a: 1, w: 'A constant doesn\'t move the argmax.' },
+    { l: 'Undergrad', q: 'For exponential-family models, what does the E step really need to pass to the M step?', o: ['Every posterior qₙ(zₙ)', 'The expected sufficient statistics Σₙ E[T(yₙ,zₙ)]', 'Only the log-likelihood', 'The gradient of A'], a: 1, w: 'The M step solves ∇A(θ) = (1/N)Σ E[T]. In the demo, Σr, Σry and Σry² are all it needs.' },
+    { l: 'Grad', q: 'Which M step variant still guarantees monotone ℓ?', o: ['Any update at all', 'Any θ with Q(θ,θᵗ) ≥ Q(θᵗ,θᵗ), e.g. one gradient step (GEM) or block-wise maximization (ECM)', 'Only the exact argmax', 'An overrelaxed step θᵗ + 2(θ* − θᵗ), always'], a: 1, w: 'The chain in Eq. 8.145 only needs link ② to hold. Overrelaxation can break it unless you add a safeguard.' }
+  ],
+  gmm: [
+    { l: 'Kid', q: 'In the geyser picture, a purple dot means…', o: ['It\'s a mistake', 'The computer is unsure: about half red, half blue', 'It\'s the center', 'It\'s the newest eruption'], a: 1, w: 'Color mixes red and blue by responsibility. Purple dots sit between the two blobs.' },
+    { l: 'HS', q: 'Which step moves and reshapes the ellipses, and which recolors the dots?', o: ['E moves, M recolors', 'M moves/reshapes, E recolors', 'Both do both', 'Neither'], a: 1, w: 'Step through it in the demo: the E button only changes colors, the M button only changes ellipses.' },
+    { l: 'Undergrad', q: 'After an M step, π₁ = r₁ / N. If the soft count r₁ = 97.9 and N = 272, π₁ ≈ …', o: ['0.36', '0.50', '0.64', '97.9'], a: 0, w: '97.9 / 272 ≈ 0.36. Cluster 1 "owns" about 36% of the eruptions.' },
+    { l: 'Undergrad', q: 'EM for a GMM reduces to K-means when…', o: ['K = 2', 'Covariances are σ²I, weights are equal, and σ → 0, so responsibilities become hard 0/1', 'The data are standardized', 'You skip the E step'], a: 1, w: 'With vanishing variance the closer mean takes the full responsibility, the E step becomes nearest-center assignment, and the M step becomes the cluster average.' },
+    { l: 'Grad', q: 'With the "bug" on (Σ divided by 2rₖ), the trace shows drops. Which link of Eq. 8.145 fails?', o: ['① lower bound', '② θᵗ⁺¹ maximizes Q(·,θᵗ)', '③ tightness', 'None; it\'s floating-point error'], a: 1, w: 'The E step is still exact, so Q is still a valid, tight bound. But the buggy covariance isn\'t Q\'s argmax, and it can even be lower than Q(θᵗ,θᵗ).' }
+  ]
+};
+(function () {
+  let total = 0, right = 0;
+  const scoreEl = $('#score');
+  const paint = () => { scoreEl.innerHTML = `Quiz <b>${right}</b> / ${total}`; };
+  $$('[data-quiz]').forEach(box => {
+    const qs = QUIZ[box.dataset.quiz]; total += qs.length;
+    let local = 0;
+    function build() {
+      box.innerHTML = qs.map((q, i) => `<div class="qq" data-i="${i}"><p class="qt"><span class="qn">Q${i + 1}</span>${q.q}<span class="ql">${q.l}</span></p><div class="opts">${q.o.map((o, j) => `<button class="opt" data-j="${j}">${o}</button>`).join('')}</div></div>`).join('') +
+        `<div class="quizfoot"><span class="qs">0 / ${qs.length} correct</span><button class="b qreset">Reset these questions</button></div>`;
+    }
+    build();
+    box.addEventListener('click', e => {
+      if (e.target.closest('.qreset')) { right -= local; local = 0; build(); paint(); return; }
+      const b = e.target.closest('.opt'); if (!b || b.disabled) return;
+      const card = b.closest('.qq'), q = qs[+card.dataset.i], ok = +b.dataset.j === q.a;
+      $$('.opt', card).forEach((x, k) => { x.disabled = true; if (k === q.a) x.classList.add('right'); });
+      if (!ok) b.classList.add('wrong');
+      card.insertAdjacentHTML('beforeend', `<p class="why-ans"><b class="${ok ? 'ok' : 'no'}">${ok ? 'Correct.' : 'Not quite.'}</b> ${q.w}</p>`);
+      if (ok) { local++; right++; }
+      $('.qs', box).textContent = `${local} / ${qs.length} correct`;
+      paint();
+    });
+  });
+  paint();
+})();
+
+/* ---------- Rail highlight ---------- */
+(function () {
+  const links = $$('#rail a'), secs = links.map(a => $(a.getAttribute('href')));
+  const io = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) links.forEach(l => l.classList.toggle('on', l.getAttribute('href') === '#' + e.target.id)); });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  secs.forEach(s => s && io.observe(s));
+})();
+})();
+</script>
+
+</body>
+</html>
